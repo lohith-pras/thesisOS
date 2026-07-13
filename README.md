@@ -1,5 +1,7 @@
 # ThesisOS
 
+![ThesisOS judge-mode workflow](docs/assets/thesisos-hero.gif)
+
 ThesisOS is a local-first thesis agent for Master’s and Bachelor’s students. It turns supervisor feedback into a reviewable, evidence-backed change set across literature, notes, thesis text, and experiments.
 
 ## Working vertical slice
@@ -30,18 +32,26 @@ Start the local workspace website and its read-only Zotero bridge:
 npm run app
 ```
 
+For judges or reviewers, start the complete fixture workflow with no Zotero, Ollama, API key, or filesystem writes:
+
+```bash
+npm run app -- --demo
+```
+
+Judge mode activates the labelled demo library immediately. It tries Codex CLI for decomposition and visibly falls back to the validated deterministic runtime when Codex is unavailable. The workflow stops at note preview so it cannot write to a judge's filesystem.
+
 Open `http://127.0.0.1:4173`. Keep Zotero Desktop running; the website checks the local API automatically, asks for a library choice only when necessary, and loads real bibliographic metadata into the Library view.
 
 The website defaults to the authenticated Codex CLI runtime for feedback decomposition. Choose the deterministic offline runtime when Codex is unavailable, or the GPT-5.6 runtime when `OPENAI_API_KEY` is configured.
 
 ### Website walkthrough
 
-1. Connect Zotero Desktop, or deliberately choose **Use demo library** if Zotero is unavailable. Demo data is always labelled and never presented as a real connection.
+1. Connect Zotero Desktop, or start with `--demo`. Demo data is always labelled and never presented as a real connection.
 2. Add exact supervisor feedback and choose a decomposition runtime.
 3. Review the validated tasks and approve the literature task.
 4. Run the approved read-only library search.
 5. Select reviewed papers and attach them as structured evidence references.
-6. Preview the evidence-linked Obsidian Markdown note.
+6. Choose the local template, or explicitly approve sending only the selected evidence to GPT-5.6 for a grounded draft whose citations are restricted to selected source IDs.
 7. Enter an absolute Obsidian vault path and choose **Approve and write note**. ThesisOS creates `ThesisOS/Literature/` and refuses to overwrite an existing note.
 
 ```bash
@@ -83,7 +93,27 @@ List the canonical top-level paper library without requiring a task approval:
 npm run zotero -- --list --input-dir ./demo-output/my-run
 ```
 
-This writes `zotero-library.json`; searches write `zotero-candidates.json`. Both operations are read-only and never import or change Zotero items. ThesisOS counts bibliographic papers across the personal library and every accessible group library. It automatically selects the library when exactly one is non-empty. If several contain papers, the error prints a catalog with each library's ID, type, name, and paper count.
+This writes `zotero-library.json`; searches write `zotero-candidates.json`. Both operations are read-only and never import or change Zotero items. Search ranks the selected library from title, authors, venue, abstract, Zotero tags, and DOI instead of requiring the feedback to match a title.
+
+For private, local semantic ranking, install the default Ollama embedding model:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+When Ollama is unavailable, ThesisOS continues with weighted metadata matching and labels the fallback in the search artifact and website. Configure another local Ollama model with `THESISOS_EMBEDDING_MODEL`; paper context is not sent to GPT automatically.
+
+Paper embeddings are content-addressed by source ID, indexed text, and model, then stored locally under `.thesisos-cache/`. Queries are embedded on every search; unchanged papers are reused. The website reports abstract coverage, metadata-only candidates, the applied relevance threshold, and the retrieval fallback mode.
+
+Run the five-query retrieval baseline against the selected Zotero library:
+
+```bash
+npm run eval:retrieval
+```
+
+The report includes recall@5 and mean reciprocal rank and fails below the current recall gate of 0.60. Expected paper keys live in `fixtures/retrieval-eval.json` and should be reviewed when the research corpus changes.
+
+ThesisOS counts bibliographic papers across the personal library and every accessible group library. It automatically selects the library when exactly one is non-empty. If several contain papers, the error prints a catalog with each library's ID, type, name, and paper count.
 
 Choose one library by name or ID; the choice is stored in the project's `.thesisos.json` and reused on later runs:
 
@@ -144,12 +174,12 @@ npm run demo -- --ai --feedback "Compare distributed ISAC literature and explain
 
 For each successful run, inspect that `schemaVersion` is `1`, every `dependsOn` ID exists, and the state contains `approvalRequiredForWrites: true`. The offline run proves the local contract; the OpenAI run proves the live adapter and model output validation.
 
-Architecture decisions are recorded under `docs/decisions/`: [ADR 0001: Local-first Zotero authentication](docs/decisions/0001-zotero-authentication.md) and [ADR 0002: Approval-gated evidence note loop](docs/decisions/0002-approved-evidence-note-loop.md).
+Architecture decisions are recorded under `docs/decisions/`: [ADR 0001: Local-first Zotero authentication](docs/decisions/0001-zotero-authentication.md), [ADR 0002: Approval-gated evidence note loop](docs/decisions/0002-approved-evidence-note-loop.md), [ADR 0003: Semantic Zotero retrieval](docs/decisions/0003-semantic-zotero-retrieval.md), and [ADR 0004: Consent-gated grounded drafting](docs/decisions/0004-grounded-note-drafting.md).
 
 ## Adapter status
 
 - Zotero: local personal/group library discovery, selection, listing, and approved search are implemented read-only.
-- Obsidian: evidence-linked Markdown preview and explicitly approved, non-overwriting local write are implemented.
+- Obsidian: deterministic or GPT-5.6-grounded Markdown preview and explicitly approved, non-overwriting local write are implemented.
 - Overleaf: optionally operate through a local Git checkout.
 - VS Code/Git: create experiment plans, inspect results, and prepare a reviewable branch or patch.
 - arXiv: discover papers from a research question before Zotero import.

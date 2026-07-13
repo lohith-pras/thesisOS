@@ -11,6 +11,7 @@ import { validateArtifacts } from "./core/schema.mjs";
 import { applyReviewDecisions } from "./core/review.mjs";
 import { selectEvidenceReferences } from "./core/evidence.mjs";
 import { createObsidianNotePreview, writeObsidianNote } from "./core/obsidian.mjs";
+import { createDeterministicDraft, draftEvidenceNoteWithOpenAI } from "./core/note-drafting.mjs";
 import { demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
 import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
 
@@ -117,11 +118,18 @@ export function createAppServer(dependencies = {}) {
   const writeNote = dependencies.writeNote ?? writeObsidianNote;
   const loadDemoLibrary = dependencies.loadDemoLibrary ?? demoLibraryPayload;
   const searchDemo = dependencies.searchDemo ?? searchDemoLibrary;
+  const draftOpenAI = dependencies.draftOpenAI ?? draftEvidenceNoteWithOpenAI;
+  const draftFallback = dependencies.draftFallback ?? createDeterministicDraft;
+  const judgeMode = dependencies.judgeMode === true;
 
   return createServer(async (request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
     try {
       if (request.method === "GET" && url.pathname === "/api/zotero/status") {
+        if (judgeMode) {
+          sendJson(response, 200, loadDemoLibrary());
+          return;
+        }
         const savedLibrary = await loadSelection(projectDir);
         const artifact = await listPapers(savedLibrary ? { savedLibrary } : {});
         sendJson(response, 200, connectionPayload(artifact));
@@ -152,20 +160,31 @@ export function createAppServer(dependencies = {}) {
           throw httpError(400, "Decomposition provider must be 'offline', 'codex', or 'openai'.");
         }
 
-        const taskGraph = provider === "codex"
-          ? await decomposeCodex(feedback, { model: body.model, cwd: projectDir })
-          : provider === "openai"
-            ? await decomposeOpenAI(feedback, { model: body.model })
-            : await decomposeOffline(feedback);
+        let runtimeProvider = provider;
+        let runtimeWarning;
+        let taskGraph;
+        if (provider === "codex") {
+          try {
+            taskGraph = await decomposeCodex(feedback, { model: body.model, cwd: projectDir });
+          } catch (error) {
+            if (!judgeMode) throw error;
+            taskGraph = await decomposeOffline(feedback);
+            runtimeProvider = "offline-fallback";
+            runtimeWarning = `Codex CLI unavailable in judge mode; deterministic fallback used. ${error.message}`;
+          }
+        } else taskGraph = provider === "openai"
+          ? await decomposeOpenAI(feedback, { model: body.model })
+          : await decomposeOffline(feedback);
         const state = createThesisState({ project, feedback, taskGraph });
         validateArtifacts(taskGraph, state);
         sendJson(response, 200, {
           taskGraph,
           state,
           runtime: {
-            provider,
+            provider: runtimeProvider,
             model: body.model || (provider === "openai" ? DEFAULT_MODEL : provider === "offline" ? "deterministic-v1" : "codex-default"),
-            validated: true
+            validated: true,
+            ...(runtimeWarning ? { warning: runtimeWarning } : {})
           }
         });
         return;
@@ -186,7 +205,7 @@ export function createAppServer(dependencies = {}) {
         const body = await readJsonBody(request);
         if (body.mode === "demo") {
           try {
-            sendJson(response, 200, searchDemo(body.taskGraph, { query: body.query }));
+            sendJson(response, 200, await searchDemo(body.taskGraph, { query: body.query }));
           } catch (error) {
             throw httpError(409, error.message);
           }
@@ -196,7 +215,8 @@ export function createAppServer(dependencies = {}) {
         try {
           const artifact = await searchPapers(body.taskGraph, {
             ...(savedLibrary ? { savedLibrary } : {}),
-            ...(typeof body.query === "string" && body.query.trim() ? { query: body.query.trim() } : {})
+            ...(typeof body.query === "string" && body.query.trim() ? { query: body.query.trim() } : {}),
+            cachePath: resolve(projectDir, ".thesisos-cache", "zotero-embeddings.json")
           });
           sendJson(response, 200, artifact);
         } catch (error) {
@@ -223,7 +243,22 @@ export function createAppServer(dependencies = {}) {
         }
         return;
       }
+      if (request.method === "POST" && url.pathname === "/api/workflow/notes/draft") {
+        const body = await readJsonBody(request);
+        if (body.approvedExternalProcessing !== true) throw httpError(400, "Explicit approval is required before sending selected evidence to GPT-5.6.");
+        if (judgeMode) {
+          sendJson(response, 200, draftFallback(body.feedback, body.evidenceRefs, "Judge mode uses the deterministic grounded template and does not call an external drafting API."));
+          return;
+        }
+        try {
+          sendJson(response, 200, await draftOpenAI(body, { model: body.model }));
+        } catch (error) {
+          sendJson(response, 200, draftFallback(body.feedback, body.evidenceRefs, `GPT-5.6 drafting unavailable; deterministic template used. ${error.message}`));
+        }
+        return;
+      }
       if (request.method === "POST" && url.pathname === "/api/workflow/notes/write") {
+        if (judgeMode) throw httpError(403, "Judge mode is preview-only and cannot write to the filesystem.");
         const body = await readJsonBody(request);
         try {
           const artifact = await writeNote(body.preview, { vaultPath: body.vaultPath, approved: body.approved });
@@ -256,12 +291,19 @@ export function createAppServer(dependencies = {}) {
 export function startAppServer(options = {}) {
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? Number(process.env.THESISOS_PORT ?? 4173);
-  const server = createAppServer(options.dependencies);
+  const server = createAppServer({ ...options.dependencies, judgeMode: options.judgeMode ?? options.dependencies?.judgeMode });
   server.listen(port, host, () => {
     console.log(`ThesisOS workspace: http://${host}:${port}`);
     console.log("Zotero access: local, read-only, no API key required");
+    if (options.judgeMode) console.log("Judge mode: demo library active; no Zotero or Ollama required");
   });
   return server;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) startAppServer();
+export function parseAppArgs(args = []) {
+  const unknown = args.filter((arg) => arg !== "--demo");
+  if (unknown.length) throw new Error(`Unknown app option: ${unknown[0]}`);
+  return { judgeMode: args.includes("--demo") };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) startAppServer(parseAppArgs(process.argv.slice(2)));

@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
+import { validateGroundedDraft } from "./note-drafting.mjs";
 
 function requireText(value, label) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required.`);
@@ -14,10 +15,11 @@ function yamlString(value) {
   return JSON.stringify(String(value));
 }
 
-export function createObsidianNotePreview({ project, feedback, evidenceRefs }, options = {}) {
+export function createObsidianNotePreview({ project, feedback, evidenceRefs, draft }, options = {}) {
   const projectName = requireText(project, "Project name");
   const sourceFeedback = requireText(feedback, "Supervisor feedback");
   if (!Array.isArray(evidenceRefs) || evidenceRefs.length === 0) throw new Error("At least one evidence reference is required.");
+  if (draft) validateGroundedDraft(draft, evidenceRefs);
   const title = `Literature evidence — ${projectName}`;
   const filename = `${slugify(title)}.md`;
   const createdAt = options.now ?? new Date().toISOString();
@@ -28,7 +30,8 @@ export function createObsidianNotePreview({ project, feedback, evidenceRefs }, o
     const primaryLink = reference.doi ? `https://doi.org/${reference.doi}` : reference.url;
     return `## ${index + 1}. ${paperTitle}\n\n- Authors: ${authors}\n- Year: ${reference.year ?? "Not recorded"}\n- Zotero source ID: \`${sourceId}\`\n- Zotero item key: \`${reference.key ?? "Not recorded"}\`\n- Library: ${reference.library?.name ?? reference.library?.id ?? "Not recorded"}\n- DOI: ${reference.doi ? `[${reference.doi}](https://doi.org/${reference.doi})` : "Not recorded"}\n- Source link: ${primaryLink ? `[Open source](${primaryLink})` : "Not recorded"}\n\n### Researcher review\n\n- Claim:\n- Method:\n- Limitation:\n- Relevance to feedback:\n`;
   }).join("\n");
-  const markdown = `---\ntitle: ${yamlString(title)}\nproject: ${yamlString(projectName)}\ncreated: ${yamlString(createdAt)}\nsource_count: ${evidenceRefs.length}\ntags:\n  - thesisos\n  - literature-evidence\n---\n\n# ${title}\n\n## Supervisor feedback\n\n> ${sourceFeedback.replaceAll("\n", "\n> ")}\n\n## Evidence sources\n\n${sources}`;
+  const synthesis = draft ? `## Grounded synthesis\n\n${draft.overview}\n\n${draft.sourceNotes.map((note) => `### [${note.sourceId}]\n\n${note.summary}\n\n**Relevance:** ${note.relevance}`).join("\n\n")}\n\n> Draft provider: ${draft.provider}${draft.model && draft.model !== "none" ? ` · ${draft.model}` : ""}. Verify every statement before thesis use.\n\n` : "";
+  const markdown = `---\ntitle: ${yamlString(title)}\nproject: ${yamlString(projectName)}\ncreated: ${yamlString(createdAt)}\nsource_count: ${evidenceRefs.length}\ntags:\n  - thesisos\n  - literature-evidence\n---\n\n# ${title}\n\n## Supervisor feedback\n\n> ${sourceFeedback.replaceAll("\n", "\n> ")}\n\n${synthesis}## Evidence sources\n\n${sources}`;
 
   return { schemaVersion: 1, title, filename, createdAt, sourceCount: evidenceRefs.length, markdown, writeApproved: false };
 }

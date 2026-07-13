@@ -6,3 +6,4 @@ demo-output/
 .thesisos.json
 .agents/
 skills-lock.json
+.thesisos-cache/

@@ -24,8 +24,14 @@ export function selectEvidenceReferences(taskGraph, searchArtifact, sourceIds, o
       title: candidate.title,
       creators: candidate.creators ?? [],
       year: candidate.year ?? null,
+      abstract: candidate.abstract ?? null,
+      tags: candidate.tags ?? [],
       doi: candidate.doi ?? null,
-      url: candidate.url ?? null
+      url: candidate.url ?? null,
+      matchScore: candidate.matchScore ?? null,
+      matchReasons: candidate.matchReasons ?? [],
+      indexedFrom: candidate.indexedFrom ?? (candidate.abstract ? "abstract-backed" : "metadata-only"),
+      retrievalMode: searchArtifact.retrieval?.mode ?? null
     };
   });
   const selectedAt = options.now ?? new Date().toISOString();

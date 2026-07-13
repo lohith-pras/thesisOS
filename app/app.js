@@ -18,6 +18,7 @@ const defaultState = {
   selectedSourceIds: [],
   evidenceSelection: null,
   evidenceRefs: [],
+  noteDraft: null,
   notePreview: null,
   noteWrite: null,
   obsidianVaultPath: "",
@@ -102,7 +103,18 @@ function paperCard(paper, index) {
   const destination = paper.doi ? `https://doi.org/${encodeURIComponent(paper.doi)}` : paper.url;
   const selectable = state.candidates.some((candidate) => candidate.sourceId === paper.sourceId);
   const selected = state.selectedSourceIds.includes(paper.sourceId);
-  return `<article class="candidate panel${selected ? " selected" : ""}"><div class="candidate-number">${String(index + 1).padStart(2, "0")}</div><div class="candidate-main"><span class="label">${esc(statusLabel(paper.itemType || "bibliographic item"))}${paper.year ? ` · ${esc(paper.year)}` : ""}</span><h2>${esc(paper.title)}</h2><p class="authors">${paper.creators?.length ? esc(paper.creators.join("; ")) : "No creator metadata"}</p><p class="publication">${esc(paper.publicationTitle || "No publication venue recorded")}</p><p class="doi">${paper.doi ? `DOI ${esc(paper.doi)}` : `Zotero key ${esc(paper.key)}`}${destination ? ` <a href="${esc(destination)}" target="_blank" rel="noreferrer">Open source ↗</a>` : ""}</p>${selectable ? button(selected ? "Selected as evidence ✓" : "Select as evidence", `toggle-evidence:${paper.sourceId}`, selected ? "dark" : "outline") : ""}</div><div class="candidate-source"><span class="label">SOURCE ID</span><code>${esc(paper.sourceId)}</code><p>Read-only metadata from ${esc(state.connection.library?.name || "the selected Zotero library")}.</p></div></article>`;
+  return `<article class="candidate panel${selected ? " selected" : ""}"><div class="candidate-number">${String(index + 1).padStart(2, "0")}</div><div class="candidate-main"><span class="label">${esc(statusLabel(paper.itemType || "bibliographic item"))}${paper.year ? ` · ${esc(paper.year)}` : ""}</span><h2>${esc(paper.title)}</h2><p class="authors">${paper.creators?.length ? esc(paper.creators.join("; ")) : "No creator metadata"}</p><p class="publication">${esc(paper.publicationTitle || "No publication venue recorded")}</p><p class="doi">${paper.doi ? `DOI ${esc(paper.doi)}` : `Zotero key ${esc(paper.key)}`}${destination ? ` <a href="${esc(destination)}" target="_blank" rel="noreferrer">Open source ↗</a>` : ""}</p>${selectable ? button(selected ? "Selected as evidence ✓" : "Select as evidence", `toggle-evidence:${paper.sourceId}`, selected ? "dark" : "outline") : ""}</div><div class="candidate-source"><span class="label">${paper.matchScore !== undefined ? `MATCH ${Math.round(paper.matchScore * 100)}%` : "SOURCE ID"}</span><code>${esc(paper.sourceId)}</code><p>${paper.matchReasons?.length ? esc(paper.matchReasons.join(" · ")) : `Read-only metadata from ${esc(state.connection.library?.name || "the selected Zotero library")}.`}</p></div></article>`;
+}
+
+function noteWorkflowPanel() {
+  if (!state.evidenceSelection) return "";
+  const isDemo = state.connection.mode === "demo";
+  const draftWarning = state.noteDraft?.warning ? `<p class="form-error" role="status">${esc(state.noteDraft.warning)}</p>` : "";
+  const draftControls = !state.notePreview ? `<div class="note-actions">${button("Approve GPT-5.6 draft →", "draft-evidence-note", "dark")} ${button("Use local template", "preview-obsidian-note", "outline")}</div><p class="helper">GPT drafting sends only the selected papers’ titles, abstracts, tags, DOI, source IDs, and the supervisor feedback. Clicking approval consents to that external processing.</p>` : "";
+  const writeControls = state.notePreview ? (isDemo
+    ? `<p class="demo-boundary">Judge mode stops at preview. No filesystem write is performed.</p>`
+    : `<label for="obsidian-vault-path">Obsidian vault path</label><input id="obsidian-vault-path" value="${esc(state.obsidianVaultPath)}" placeholder="/absolute/path/to/your/Obsidian vault" /><p class="helper">ThesisOS will create ThesisOS/Literature inside this vault. Existing files are never overwritten.</p>${button(state.noteWrite ? "Note written ✓" : "Approve and write note", "write-obsidian-note", "dark", Boolean(state.noteWrite))}`) : "";
+  return `<section class="panel note-workflow"><div class="panel-head"><span class="label">OBSIDIAN NOTE</span><span class="timestamp">${state.noteWrite ? "Written with approval" : state.notePreview ? "Preview only" : "No write yet"}</span></div><h2>${state.noteWrite ? "Literature note created." : "Turn selected evidence into a grounded note."}</h2><p>${state.noteWrite ? `Saved to ${esc(state.noteWrite.path)}` : "Drafting and filesystem writing are separate approval boundaries."}</p>${draftWarning}${draftControls}${state.notePreview ? `<pre class="note-preview">${esc(state.notePreview.markdown)}</pre>` : ""}${writeControls}</section>`;
 }
 
 function evidence() {
@@ -118,12 +130,13 @@ function evidence() {
       : literatureTask
         ? button("Review literature task →", "open-literature-task")
         : button("Add feedback to create a literature task →", "new-feedback", "outline");
-  const notePanel = state.evidenceSelection ? `<section class="panel note-workflow"><div class="panel-head"><span class="label">OBSIDIAN NOTE</span><span class="timestamp">${state.noteWrite ? "Written with approval" : state.notePreview ? "Preview only" : "No write yet"}</span></div><h2>${state.noteWrite ? "Literature note created." : "Turn selected evidence into a reviewable note."}</h2><p>${state.noteWrite ? `Saved to ${esc(state.noteWrite.path)}` : "The preview contains bibliographic facts and source links only. Claim, method, and limitation fields remain for researcher review."}</p>${state.notePreview ? `<pre class="note-preview">${esc(state.notePreview.markdown)}</pre><label for="obsidian-vault-path">Obsidian vault path</label><input id="obsidian-vault-path" value="${esc(state.obsidianVaultPath)}" placeholder="/absolute/path/to/your/Obsidian vault" /><p class="helper">ThesisOS will create ThesisOS/Literature inside this vault. Existing files are never overwritten.</p>${button(state.noteWrite ? "Note written ✓" : "Approve and write note", "write-obsidian-note", "dark", Boolean(state.noteWrite))}` : button("Preview Obsidian note →", "preview-obsidian-note")}</section>` : "";
+  const notePanel = noteWorkflowPanel();
   const searchForm = showingSearchResults ? `<form class="literature-search panel" id="literature-search-form"><div><label for="literature-search-query">Refine Zotero search</label><p>Use a title, author surname, DOI, or broader topic from your library.</p></div><input id="literature-search-query" name="query" value="${esc(state.searchQuery || state.searchArtifact?.query || "")}" required /><button class="button button-dark" type="submit">Search again</button></form>` : "";
+  const retrievalNotice = showingSearchResults && state.searchArtifact?.retrieval ? `<p class="retrieval-notice"><strong>${state.searchArtifact.retrieval.mode === "hybrid-semantic" ? "Semantic + metadata ranking" : "Metadata ranking fallback"}</strong> · indexed ${state.searchArtifact.indexedPaperCount ?? state.connection.paperCount} papers. ${state.searchArtifact.retrieval.coverage ? `${state.searchArtifact.retrieval.coverage.withAbstract}/${state.searchArtifact.retrieval.coverage.total} have abstracts; ${state.searchArtifact.retrieval.coverage.metadataOnly} ranked from metadata only.` : ""} Minimum score ${state.searchArtifact.retrieval.minimumScore ?? "not applied"}.${state.searchArtifact.retrieval.warning ? ` ${esc(state.searchArtifact.retrieval.warning)}` : ""}</p>` : "";
   const results = showingSearchResults && !visiblePapers.length
     ? emptyState("No papers matched", `Zotero found no papers for “${state.searchArtifact?.query || state.searchQuery}”. Refine the query and search again.`)
     : `<section class="evidence-list">${visiblePapers.map(paperCard).join("")}</section>`;
-  return `<div class="page-intro compact">${eyebrow("Library / Zotero")}<h1>${showingSearchResults ? "Review the search results." : "Read the library as evidence."}</h1><p>${showingSearchResults ? `${state.candidates.length} candidates returned for “${esc(state.searchArtifact?.query || state.feedback)}”. ${state.candidates.length ? "Select only papers you reviewed and want attached to the task." : "Try a broader or more specific library query below."}` : `${state.connection.paperCount} top-level bibliographic papers loaded from ${esc(state.connection.library?.name || "the selected library")}. These full-library cards are read-only; approve and run a literature search to select evidence.`}</p></div>${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<section class="evidence-toolbar"><div><span class="label">${showingSearchResults ? "APPROVED SEARCH" : "SELECTED LIBRARY"}</span><strong>${showingSearchResults ? esc(state.searchArtifact?.query) : esc(state.connection.library?.name || state.connection.library?.id)}</strong></div><span class="connection connected"><i></i>${showingSearchResults ? `${state.candidates.length} matches · ${state.selectedSourceIds.length} selected` : `Read-only · ${state.connection.paperCount} papers`}</span>${libraryAction}</section>${searchForm}${results}<div class="artifact-note"><i>◇</i><span>${state.evidenceSelection ? `<strong>${state.evidenceSelection.selectedCount} evidence references attached</strong> · ready for note preview` : `Live source: <strong>${state.connection.mode === "demo" ? "demo-fixture" : "zotero-local"}</strong> · stable source IDs retained · no Zotero writes`}</span></div>${notePanel}`;
+  return `<div class="page-intro compact">${eyebrow("Library / Zotero")}<h1>${showingSearchResults ? "Review the search results." : "Read the library as evidence."}</h1><p>${showingSearchResults ? `${state.candidates.length} candidates returned for “${esc(state.searchArtifact?.query || state.feedback)}”. ${state.candidates.length ? "Select only papers you reviewed and want attached to the task." : "Try a broader or more specific library query below."}` : `${state.connection.paperCount} top-level bibliographic papers loaded from ${esc(state.connection.library?.name || "the selected library")}. These full-library cards are read-only; approve and run a literature search to select evidence.`}</p></div>${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<section class="evidence-toolbar"><div><span class="label">${showingSearchResults ? "APPROVED SEARCH" : "SELECTED LIBRARY"}</span><strong>${showingSearchResults ? esc(state.searchArtifact?.query) : esc(state.connection.library?.name || state.connection.library?.id)}</strong></div><span class="connection connected"><i></i>${showingSearchResults ? `${state.candidates.length} matches · ${state.selectedSourceIds.length} selected` : `Read-only · ${state.connection.paperCount} papers`}</span>${libraryAction}</section>${retrievalNotice}${searchForm}${results}<div class="artifact-note"><i>◇</i><span>${state.evidenceSelection ? `<strong>${state.evidenceSelection.selectedCount} evidence references attached</strong> · ready for note preview` : `Live source: <strong>${state.connection.mode === "demo" ? "demo-fixture" : "zotero-local"}</strong> · stable source IDs retained · no Zotero writes`}</span></div>${notePanel}`;
 }
 
 function libraryChoices() {
@@ -222,19 +235,52 @@ async function handleAction(action) {
       state.tasks = payload.taskGraph.tasks;
       state.evidenceSelection = payload.selection;
       state.evidenceRefs = payload.selection.evidenceRefs;
+      state.noteDraft = null;
+      state.notePreview = null;
+      state.noteWrite = null;
     } catch (error) {
       state.workflowError = error.message;
     }
     saveState();
     return render();
   }
+  if (action === "draft-evidence-note") {
+    state.workflowBusy = true;
+    state.workflowError = "";
+    try {
+      const draftResponse = await fetch("/api/workflow/notes/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback: state.feedback, evidenceRefs: state.evidenceRefs, approvedExternalProcessing: true, model: "gpt-5.6" })
+      });
+      const draft = await draftResponse.json();
+      if (!draftResponse.ok) throw new Error(draft.message || "The grounded draft could not be created.");
+      const previewResponse = await fetch("/api/workflow/notes/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: state.project, feedback: state.feedback, evidenceRefs: state.evidenceRefs, draft })
+      });
+      const preview = await previewResponse.json();
+      if (!previewResponse.ok) throw new Error(preview.message || "The grounded note preview could not be created.");
+      state.noteDraft = draft;
+      state.notePreview = preview;
+    } catch (error) {
+      state.workflowError = error.message;
+    } finally {
+      state.workflowBusy = false;
+      saveState();
+      render();
+    }
+    return;
+  }
   if (action === "preview-obsidian-note") {
     state.workflowError = "";
+    state.noteDraft = null;
     try {
       const response = await fetch("/api/workflow/notes/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: state.project, feedback: state.feedback, evidenceRefs: state.evidenceRefs })
+        body: JSON.stringify({ project: state.project, feedback: state.feedback, evidenceRefs: state.evidenceRefs, draft: null })
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "The Obsidian note preview could not be created.");
@@ -316,6 +362,12 @@ async function handleAction(action) {
       state.searchArtifact = payload;
       state.searchQuery = payload.query || state.searchQuery;
       state.candidates = payload.candidates || [];
+      state.selectedSourceIds = [];
+      state.evidenceSelection = null;
+      state.evidenceRefs = [];
+      state.noteDraft = null;
+      state.notePreview = null;
+      state.noteWrite = null;
       state.view = "evidence";
     } catch (error) {
       state.workflowError = error.message;
