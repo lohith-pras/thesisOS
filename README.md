@@ -1,5 +1,7 @@
 # ThesisOS
 
+![ThesisOS judge-mode workflow](docs/assets/thesisos-hero.gif)
+
 ThesisOS is a local-first thesis agent for Master’s and Bachelor’s students. It turns supervisor feedback into a reviewable, evidence-backed change set across literature, notes, thesis text, and experiments.
 
 ## Working vertical slice

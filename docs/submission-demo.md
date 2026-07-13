@@ -21,11 +21,11 @@ Open `http://127.0.0.1:4173`.
 
 ## Required capture checklist
 
-- [ ] README hero GIF showing feedback → approval → retrieval → grounded preview.
+- [x] README hero GIF showing feedback → approval → retrieval → grounded preview (`docs/assets/thesisos-hero.gif`).
 - [ ] Screenshot: Codex task graph from messy supervisor feedback.
-- [ ] Screenshot: semantic results with abstract coverage and match provenance.
+- [x] Screenshot: judge retrieval results with abstract coverage, threshold, fallback mode, and match provenance (`docs/assets/judge-retrieval.png`).
 - [ ] Screenshot: GPT-5.6 grounded note with stable source-ID citations.
-- [ ] Screenshot/video moment: rejected task cannot search.
+- [ ] Screenshot/video moment: rejected task cannot search (include during the narrated recording).
 - [ ] Public YouTube video under three minutes with voiceover.
 - [ ] Add the main Codex `/feedback` session ID to the submission.
 - [ ] Verify and select the Education track on the live submission form.
