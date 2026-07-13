@@ -13,6 +13,7 @@ const defaultState = {
   workflowBusy: false,
   workflowError: "",
   searchArtifact: null,
+  searchQuery: "",
   candidates: [],
   selectedSourceIds: [],
   evidenceSelection: null,
@@ -106,19 +107,23 @@ function paperCard(paper, index) {
 
 function evidence() {
   if (state.connection.status !== "connected") return `<div class="page-intro compact">${eyebrow("Library / Zotero")}<h1>Your papers appear after connection.</h1><p>ThesisOS reads top-level bibliographic metadata from Zotero Desktop and leaves the library unchanged.</p></div>${connectionPanel()}`;
-  const showingCandidates = state.candidates.length > 0;
-  const visiblePapers = showingCandidates ? state.candidates : state.papers;
+  const showingSearchResults = state.searchArtifact !== null;
+  const visiblePapers = showingSearchResults ? state.candidates : state.papers;
   const literatureTask = state.tasks.find((task) => task.kind === "literature");
   const approvedLiteratureTask = literatureTask?.approvalStatus === "approved" ? literatureTask : null;
-  const libraryAction = showingCandidates
-    ? `${button(`Attach ${state.selectedSourceIds.length} as evidence →`, "attach-evidence", "dark", state.selectedSourceIds.length === 0)}${button("Show all papers", "clear-search", "outline")}`
+  const libraryAction = showingSearchResults
+    ? `${state.candidates.length ? button(`Attach ${state.selectedSourceIds.length} as evidence →`, "attach-evidence", "dark", state.selectedSourceIds.length === 0) : ""}${button("Show all papers", "clear-search", "outline")}`
     : approvedLiteratureTask
       ? `${button("Search approved literature →", "search-zotero")}${button("Export library JSON ↗", "export-json", "outline")}`
       : literatureTask
         ? button("Review literature task →", "open-literature-task")
         : button("Add feedback to create a literature task →", "new-feedback", "outline");
   const notePanel = state.evidenceSelection ? `<section class="panel note-workflow"><div class="panel-head"><span class="label">OBSIDIAN NOTE</span><span class="timestamp">${state.noteWrite ? "Written with approval" : state.notePreview ? "Preview only" : "No write yet"}</span></div><h2>${state.noteWrite ? "Literature note created." : "Turn selected evidence into a reviewable note."}</h2><p>${state.noteWrite ? `Saved to ${esc(state.noteWrite.path)}` : "The preview contains bibliographic facts and source links only. Claim, method, and limitation fields remain for researcher review."}</p>${state.notePreview ? `<pre class="note-preview">${esc(state.notePreview.markdown)}</pre><label for="obsidian-vault-path">Obsidian vault path</label><input id="obsidian-vault-path" value="${esc(state.obsidianVaultPath)}" placeholder="/absolute/path/to/your/Obsidian vault" /><p class="helper">ThesisOS will create ThesisOS/Literature inside this vault. Existing files are never overwritten.</p>${button(state.noteWrite ? "Note written ✓" : "Approve and write note", "write-obsidian-note", "dark", Boolean(state.noteWrite))}` : button("Preview Obsidian note →", "preview-obsidian-note")}</section>` : "";
-  return `<div class="page-intro compact">${eyebrow("Library / Zotero")}<h1>${showingCandidates ? "Review the search results." : "Read the library as evidence."}</h1><p>${showingCandidates ? `${state.candidates.length} candidates returned for “${esc(state.searchArtifact?.query || state.feedback)}”. Select only papers you reviewed and want attached to the task.` : `${state.connection.paperCount} top-level bibliographic papers loaded from ${esc(state.connection.library?.name || "the selected library")}. These full-library cards are read-only; approve and run a literature search to select evidence.`}</p></div>${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<section class="evidence-toolbar"><div><span class="label">${showingCandidates ? "APPROVED SEARCH" : "SELECTED LIBRARY"}</span><strong>${showingCandidates ? esc(state.searchArtifact?.query) : esc(state.connection.library?.name || state.connection.library?.id)}</strong></div><span class="connection connected"><i></i>${showingCandidates ? `${state.selectedSourceIds.length} selected` : `Read-only · ${state.connection.paperCount} papers`}</span>${libraryAction}</section><section class="evidence-list">${visiblePapers.map(paperCard).join("")}</section><div class="artifact-note"><i>◇</i><span>${state.evidenceSelection ? `<strong>${state.evidenceSelection.selectedCount} evidence references attached</strong> · ready for note preview` : `Live source: <strong>${state.connection.mode === "demo" ? "demo-fixture" : "zotero-local"}</strong> · stable source IDs retained · no Zotero writes`}</span></div>${notePanel}`;
+  const searchForm = showingSearchResults ? `<form class="literature-search panel" id="literature-search-form"><div><label for="literature-search-query">Refine Zotero search</label><p>Use a title, author surname, DOI, or broader topic from your library.</p></div><input id="literature-search-query" name="query" value="${esc(state.searchQuery || state.searchArtifact?.query || "")}" required /><button class="button button-dark" type="submit">Search again</button></form>` : "";
+  const results = showingSearchResults && !visiblePapers.length
+    ? emptyState("No papers matched", `Zotero found no papers for “${state.searchArtifact?.query || state.searchQuery}”. Refine the query and search again.`)
+    : `<section class="evidence-list">${visiblePapers.map(paperCard).join("")}</section>`;
+  return `<div class="page-intro compact">${eyebrow("Library / Zotero")}<h1>${showingSearchResults ? "Review the search results." : "Read the library as evidence."}</h1><p>${showingSearchResults ? `${state.candidates.length} candidates returned for “${esc(state.searchArtifact?.query || state.feedback)}”. ${state.candidates.length ? "Select only papers you reviewed and want attached to the task." : "Try a broader or more specific library query below."}` : `${state.connection.paperCount} top-level bibliographic papers loaded from ${esc(state.connection.library?.name || "the selected library")}. These full-library cards are read-only; approve and run a literature search to select evidence.`}</p></div>${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<section class="evidence-toolbar"><div><span class="label">${showingSearchResults ? "APPROVED SEARCH" : "SELECTED LIBRARY"}</span><strong>${showingSearchResults ? esc(state.searchArtifact?.query) : esc(state.connection.library?.name || state.connection.library?.id)}</strong></div><span class="connection connected"><i></i>${showingSearchResults ? `${state.candidates.length} matches · ${state.selectedSourceIds.length} selected` : `Read-only · ${state.connection.paperCount} papers`}</span>${libraryAction}</section>${searchForm}${results}<div class="artifact-note"><i>◇</i><span>${state.evidenceSelection ? `<strong>${state.evidenceSelection.selectedCount} evidence references attached</strong> · ready for note preview` : `Live source: <strong>${state.connection.mode === "demo" ? "demo-fixture" : "zotero-local"}</strong> · stable source IDs retained · no Zotero writes`}</span></div>${notePanel}`;
 }
 
 function libraryChoices() {
@@ -194,7 +199,7 @@ async function handleAction(action) {
   if (action === "connect-zotero") return connectZotero();
   if (action === "use-demo-library") return connectDemoLibrary();
   if (action.startsWith("select-zotero:")) return selectZotero(action.slice("select-zotero:".length));
-  if (action === "clear-search") { state.candidates = []; state.searchArtifact = null; state.selectedSourceIds = []; saveState(); return render(); }
+  if (action === "clear-search") { state.candidates = []; state.searchArtifact = null; state.searchQuery = ""; state.selectedSourceIds = []; saveState(); return render(); }
   if (action.startsWith("toggle-evidence:")) {
     const sourceId = action.slice("toggle-evidence:".length);
     state.selectedSourceIds = state.selectedSourceIds.includes(sourceId)
@@ -304,11 +309,12 @@ async function handleAction(action) {
       const response = await fetch("/api/workflow/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskGraph: state.taskGraph, mode: state.connection.mode })
+        body: JSON.stringify({ taskGraph: state.taskGraph, mode: state.connection.mode, ...(state.searchQuery ? { query: state.searchQuery } : {}) })
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Zotero search failed.");
       state.searchArtifact = payload;
+      state.searchQuery = payload.query || state.searchQuery;
       state.candidates = payload.candidates || [];
       state.view = "evidence";
     } catch (error) {
@@ -332,6 +338,13 @@ document.addEventListener("click", (event) => {
 });
 
 app.addEventListener("submit", async (event) => {
+  if (event.target.id === "literature-search-form") {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    state.searchQuery = data.get("query")?.toString().trim() || "";
+    if (state.searchQuery) return handleAction("search-zotero");
+    return;
+  }
   if (event.target.id !== "feedback-form") return;
   event.preventDefault();
   const data = new FormData(event.target);

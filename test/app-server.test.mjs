@@ -409,6 +409,15 @@ test("full library exposes the next literature action instead of presenting iner
   assert.match(source, /Review literature task/);
 });
 
+test("frontend distinguishes a completed zero-result search and offers query refinement", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+
+  assert.match(source, /state\.searchArtifact !== null/);
+  assert.match(source, /No papers matched/);
+  assert.match(source, /literature-search-form/);
+  assert.match(source, /Search again/);
+});
+
 test("frontend previews and explicitly approves Obsidian note writes", async () => {
   const source = await readFile(resolve("app/app.js"), "utf8");
 
