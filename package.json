@@ -10,7 +10,7 @@
     "zotero": "node src/zotero-cli.mjs",
     "app": "node src/app-server.mjs",
     "test": "node --test",
-    "check": "node --check src/cli.mjs && node --check src/review-cli.mjs && node --check src/zotero-cli.mjs && node --check src/app-server.mjs && node --check src/core/decompose.mjs && node --check src/core/state.mjs && node --check src/core/schema.mjs && node --check src/core/openai.mjs && node --check src/core/codex.mjs && node --check src/core/review.mjs && node --check src/core/zotero.mjs",
+    "check": "node --check src/cli.mjs && node --check src/review-cli.mjs && node --check src/zotero-cli.mjs && node --check src/app-server.mjs && node --check src/core/decompose.mjs && node --check src/core/state.mjs && node --check src/core/schema.mjs && node --check src/core/openai.mjs && node --check src/core/codex.mjs && node --check src/core/review.mjs && node --check src/core/zotero.mjs && node --check src/core/evidence.mjs && node --check src/core/obsidian.mjs && node --check src/core/demo-library.mjs",
     "check:frontend": "node --check app/app.js"
   },
   "engines": {

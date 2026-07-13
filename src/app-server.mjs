@@ -2,7 +2,16 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { listZoteroPapers } from "./core/zotero.mjs";
+import { listZoteroPapers, searchZotero } from "./core/zotero.mjs";
+import { decomposeFeedback } from "./core/decompose.mjs";
+import { decomposeFeedbackWithCodex } from "./core/codex.mjs";
+import { DEFAULT_MODEL, decomposeFeedbackWithOpenAI } from "./core/openai.mjs";
+import { createThesisState } from "./core/state.mjs";
+import { validateArtifacts } from "./core/schema.mjs";
+import { applyReviewDecisions } from "./core/review.mjs";
+import { selectEvidenceReferences } from "./core/evidence.mjs";
+import { createObsidianNotePreview, writeObsidianNote } from "./core/obsidian.mjs";
+import { demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
 import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
 
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
@@ -59,10 +68,18 @@ async function readJsonBody(request) {
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 16_384) throw new Error("Request body is too large.");
+    if (size > 16_384) throw httpError(413, "Request body is too large.");
     chunks.push(chunk);
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
+    throw httpError(400, "Request body must be valid JSON.");
+  }
+}
+
+function httpError(statusCode, message) {
+  return Object.assign(new Error(message), { statusCode });
 }
 
 async function serveApp(pathname, response) {
@@ -90,6 +107,16 @@ export function createAppServer(dependencies = {}) {
   const listPapers = dependencies.listPapers ?? listZoteroPapers;
   const loadSelection = dependencies.loadSelection ?? loadZoteroSelection;
   const saveSelection = dependencies.saveSelection ?? saveZoteroSelection;
+  const decomposeOffline = dependencies.decomposeOffline ?? decomposeFeedback;
+  const decomposeCodex = dependencies.decomposeCodex ?? decomposeFeedbackWithCodex;
+  const decomposeOpenAI = dependencies.decomposeOpenAI ?? decomposeFeedbackWithOpenAI;
+  const reviewTasks = dependencies.reviewTasks ?? applyReviewDecisions;
+  const searchPapers = dependencies.searchPapers ?? searchZotero;
+  const selectEvidence = dependencies.selectEvidence ?? selectEvidenceReferences;
+  const previewNote = dependencies.previewNote ?? createObsidianNotePreview;
+  const writeNote = dependencies.writeNote ?? writeObsidianNote;
+  const loadDemoLibrary = dependencies.loadDemoLibrary ?? demoLibraryPayload;
+  const searchDemo = dependencies.searchDemo ?? searchDemoLibrary;
 
   return createServer(async (request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
@@ -98,6 +125,10 @@ export function createAppServer(dependencies = {}) {
         const savedLibrary = await loadSelection(projectDir);
         const artifact = await listPapers(savedLibrary ? { savedLibrary } : {});
         sendJson(response, 200, connectionPayload(artifact));
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/demo/library") {
+        sendJson(response, 200, loadDemoLibrary());
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/zotero/select") {
@@ -111,6 +142,97 @@ export function createAppServer(dependencies = {}) {
         sendJson(response, 200, connectionPayload(artifact));
         return;
       }
+      if (request.method === "POST" && url.pathname === "/api/workflow/decompose") {
+        const body = await readJsonBody(request);
+        const feedback = typeof body.feedback === "string" ? body.feedback.trim() : "";
+        const project = typeof body.project === "string" && body.project.trim() ? body.project.trim() : "Thesis workspace";
+        const provider = body.provider ?? "offline";
+        if (!feedback) throw httpError(400, "Supervisor feedback is required.");
+        if (!new Set(["offline", "codex", "openai"]).has(provider)) {
+          throw httpError(400, "Decomposition provider must be 'offline', 'codex', or 'openai'.");
+        }
+
+        const taskGraph = provider === "codex"
+          ? await decomposeCodex(feedback, { model: body.model, cwd: projectDir })
+          : provider === "openai"
+            ? await decomposeOpenAI(feedback, { model: body.model })
+            : await decomposeOffline(feedback);
+        const state = createThesisState({ project, feedback, taskGraph });
+        validateArtifacts(taskGraph, state);
+        sendJson(response, 200, {
+          taskGraph,
+          state,
+          runtime: {
+            provider,
+            model: body.model || (provider === "openai" ? DEFAULT_MODEL : provider === "offline" ? "deterministic-v1" : "codex-default"),
+            validated: true
+          }
+        });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/workflow/review") {
+        const body = await readJsonBody(request);
+        if (typeof body.taskId !== "string" || !body.taskId.trim()) throw httpError(400, "A task ID is required.");
+        if (!new Set(["approved", "rejected"]).has(body.decision)) throw httpError(400, "Decision must be 'approved' or 'rejected'.");
+        try {
+          const reviewed = reviewTasks(body.taskGraph, body.state, { [body.taskId]: body.decision });
+          sendJson(response, 200, reviewed);
+        } catch (error) {
+          throw httpError(400, error.message);
+        }
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/workflow/search") {
+        const body = await readJsonBody(request);
+        if (body.mode === "demo") {
+          try {
+            sendJson(response, 200, searchDemo(body.taskGraph, { query: body.query }));
+          } catch (error) {
+            throw httpError(409, error.message);
+          }
+          return;
+        }
+        const savedLibrary = await loadSelection(projectDir);
+        try {
+          const artifact = await searchPapers(body.taskGraph, {
+            ...(savedLibrary ? { savedLibrary } : {}),
+            ...(typeof body.query === "string" && body.query.trim() ? { query: body.query.trim() } : {})
+          });
+          sendJson(response, 200, artifact);
+        } catch (error) {
+          if (error.code) throw error;
+          throw httpError(409, error.message);
+        }
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/workflow/evidence/select") {
+        const body = await readJsonBody(request);
+        try {
+          sendJson(response, 200, selectEvidence(body.taskGraph, body.searchArtifact, body.sourceIds));
+        } catch (error) {
+          throw httpError(400, error.message);
+        }
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/workflow/notes/preview") {
+        const body = await readJsonBody(request);
+        try {
+          sendJson(response, 200, previewNote(body));
+        } catch (error) {
+          throw httpError(400, error.message);
+        }
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/workflow/notes/write") {
+        const body = await readJsonBody(request);
+        try {
+          const artifact = await writeNote(body.preview, { vaultPath: body.vaultPath, approved: body.approved });
+          sendJson(response, 201, artifact);
+        } catch (error) {
+          throw httpError(400, error.message);
+        }
+        return;
+      }
       if (url.pathname.startsWith("/api/")) {
         sendJson(response, 404, { status: "not_found", message: "API endpoint not found." });
         return;
@@ -121,6 +243,10 @@ export function createAppServer(dependencies = {}) {
       }
       await serveApp(url.pathname, response);
     } catch (error) {
+      if (error.statusCode) {
+        sendJson(response, error.statusCode, { status: "invalid_request", message: error.message });
+        return;
+      }
       const mapped = connectionError(error);
       sendJson(response, mapped.statusCode, mapped.body);
     }

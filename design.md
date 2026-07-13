@@ -103,6 +103,7 @@ The primary action is labeled `Connect Zotero Desktop` so local access is never 
 4. If Zotero cannot be reached, show `Open Zotero and try again`, explain how to enable local API access, and preserve a retry action. Never display a connected state based on cached frontend data.
 5. The Library view renders real top-level bibliographic metadata from the selected library. Notes, attachments, and annotations are excluded; every item keeps its stable source ID.
 6. A future `Connect Zotero Cloud` control is shown as unavailable rather than simulated. When implemented, it redirects to Zotero OAuth and returns through the same library-choice flow.
+7. If Zotero is unavailable, offer `Use demo library` as a secondary, opt-in action. The connection header, library name, and source IDs must all say `demo` or `fixture`; the app must never silently fall back to it.
 
 ThesisOS never asks for a user's Zotero password. Local connection requires no API key. Manual Web API keys remain an advanced CLI/self-hosting option, not website onboarding.
 
@@ -112,6 +113,17 @@ ThesisOS never asks for a user's Zotero password. Local connection requires no A
 - `connected`: the selected library and real paper count are available.
 - `selection_required`: multiple non-empty libraries require an explicit choice.
 - `unavailable`: Zotero is closed, local access is disabled, or the connector returned an actionable error.
+- `connected / demo`: a clearly labelled, read-only fixture is active for reviewer testing.
+
+## Evidence-to-note user flow
+
+1. Feedback is submitted to the chosen offline, Codex CLI, or OpenAI runtime through the local app server.
+2. The server validates both the task graph and thesis state before the browser displays tasks.
+3. Approving a literature task updates both validated artifacts; approval does not itself perform a write.
+4. The approved task may run a read-only search against the selected Zotero library or the explicitly selected demo fixture.
+5. The user selects reviewed candidates. ThesisOS attaches structured `evidenceRefs` containing source ID, item key, library, title, creators, year, DOI, and URL.
+6. Obsidian note generation first returns a preview. Bibliographic metadata is rendered as fact; claim, method, limitation, and relevance remain blank researcher-review fields.
+7. The user provides an absolute vault path and separately chooses `Approve and write note`. The adapter creates a Markdown file under `ThesisOS/Literature` and refuses to overwrite an existing file.
 
 ## Landing page structure
 

@@ -37,6 +37,14 @@ export function validateTaskGraph(graph) {
     if (task.reviewedAt !== undefined) requireString(task.reviewedAt, `${path}.reviewedAt`);
     requireArray(task.evidence, `${path}.evidence`);
     if (!task.evidence.every((item) => typeof item === "string" && item.trim())) fail(`${path}.evidence`, "expected non-empty strings");
+    if (task.evidenceRefs !== undefined) {
+      requireArray(task.evidenceRefs, `${path}.evidenceRefs`);
+      for (const [refIndex, reference] of task.evidenceRefs.entries()) {
+        requireString(reference?.sourceId, `${path}.evidenceRefs[${refIndex}].sourceId`);
+        requireString(reference?.key, `${path}.evidenceRefs[${refIndex}].key`);
+        requireString(reference?.title, `${path}.evidenceRefs[${refIndex}].title`);
+      }
+    }
     if (task.dependsOn !== undefined) {
       requireArray(task.dependsOn, `${path}.dependsOn`);
       if (!task.dependsOn.every((id) => typeof id === "string")) fail(`${path}.dependsOn`, "expected task ids");
