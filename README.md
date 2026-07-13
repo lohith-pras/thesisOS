@@ -83,7 +83,17 @@ List the canonical top-level paper library without requiring a task approval:
 npm run zotero -- --list --input-dir ./demo-output/my-run
 ```
 
-This writes `zotero-library.json`; searches write `zotero-candidates.json`. Both operations are read-only and never import or change Zotero items. ThesisOS counts bibliographic papers across the personal library and every accessible group library. It automatically selects the library when exactly one is non-empty. If several contain papers, the error prints a catalog with each library's ID, type, name, and paper count.
+This writes `zotero-library.json`; searches write `zotero-candidates.json`. Both operations are read-only and never import or change Zotero items. Search ranks the selected library from title, authors, venue, abstract, Zotero tags, and DOI instead of requiring the feedback to match a title.
+
+For private, local semantic ranking, install the default Ollama embedding model:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+When Ollama is unavailable, ThesisOS continues with weighted metadata matching and labels the fallback in the search artifact and website. Configure another local Ollama model with `THESISOS_EMBEDDING_MODEL`; paper context is not sent to GPT automatically.
+
+ThesisOS counts bibliographic papers across the personal library and every accessible group library. It automatically selects the library when exactly one is non-empty. If several contain papers, the error prints a catalog with each library's ID, type, name, and paper count.
 
 Choose one library by name or ID; the choice is stored in the project's `.thesisos.json` and reused on later runs:
 
@@ -144,7 +154,7 @@ npm run demo -- --ai --feedback "Compare distributed ISAC literature and explain
 
 For each successful run, inspect that `schemaVersion` is `1`, every `dependsOn` ID exists, and the state contains `approvalRequiredForWrites: true`. The offline run proves the local contract; the OpenAI run proves the live adapter and model output validation.
 
-Architecture decisions are recorded under `docs/decisions/`: [ADR 0001: Local-first Zotero authentication](docs/decisions/0001-zotero-authentication.md) and [ADR 0002: Approval-gated evidence note loop](docs/decisions/0002-approved-evidence-note-loop.md).
+Architecture decisions are recorded under `docs/decisions/`: [ADR 0001: Local-first Zotero authentication](docs/decisions/0001-zotero-authentication.md), [ADR 0002: Approval-gated evidence note loop](docs/decisions/0002-approved-evidence-note-loop.md), and [ADR 0003: Semantic Zotero retrieval](docs/decisions/0003-semantic-zotero-retrieval.md).
 
 ## Adapter status
 

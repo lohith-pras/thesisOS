@@ -159,6 +159,7 @@ test("searches Zotero read-only and normalizes candidates", async () => {
   const artifact = await searchZotero(graph, {
     libraryType: "user",
     libraryId: "0",
+    embeddingProvider: "none",
     fetchImpl: async (url, init) => {
       request = { url, init };
       return {
@@ -173,6 +174,8 @@ test("searches Zotero read-only and normalizes candidates", async () => {
             creators: [{ firstName: "Ada", lastName: "Khalili", creatorType: "author" }],
             date: "2025-03-01",
             publicationTitle: "Journal of Radar Research",
+            abstractNote: "A constrained sensing optimization method.",
+            tags: [{ tag: "optimization" }],
             DOI: "10.1000/example",
             url: "https://example.test/paper"
           }
@@ -183,10 +186,14 @@ test("searches Zotero read-only and normalizes candidates", async () => {
 
   assert.equal(request.init.method, "GET");
   assert.equal(request.init.headers["Zotero-API-Version"], "3");
-  assert.equal(request.url.searchParams.get("q"), "Khalili 2025");
+  assert.equal(request.url.searchParams.get("q"), null);
   assert.equal(artifact.access, "read-only");
+  assert.equal(artifact.retrieval.mode, "hybrid-lexical");
+  assert.equal(artifact.indexedPaperCount, 1);
   assert.equal(artifact.candidates[0].creators[0], "Ada Khalili");
   assert.equal(artifact.candidates[0].year, "2025");
+  assert.equal(artifact.candidates[0].abstract, "A constrained sensing optimization method.");
+  assert.deepEqual(artifact.candidates[0].tags, ["optimization"]);
 });
 
 test("extracts citation queries and parses Zotero CLI options", () => {
@@ -378,6 +385,7 @@ test("searches all selected libraries without collapsing equal Zotero item keys"
   graph.tasks[0].approvalStatus = "approved";
   const artifact = await searchZotero(graph, {
     allLibraries: true,
+    embeddingProvider: "none",
     fetchImpl: async (url) => {
       if (url.pathname.endsWith("/groups")) return zoteroResponse([{ id: 10, data: { name: "Research" } }]);
       const title = url.pathname.includes("/users/0/") ? "Personal result" : "Group result";
@@ -386,7 +394,7 @@ test("searches all selected libraries without collapsing equal Zotero item keys"
   });
 
   assert.equal(artifact.candidates.length, 2);
-  assert.deepEqual(artifact.candidates.map((paper) => paper.sourceId), ["user:0:SAME", "group:10:SAME"]);
+  assert.deepEqual(new Set(artifact.candidates.map((paper) => paper.sourceId)), new Set(["user:0:SAME", "group:10:SAME"]));
   assert.deepEqual(artifact.libraries.map((library) => library.name), ["My Library", "Research"]);
 });
 

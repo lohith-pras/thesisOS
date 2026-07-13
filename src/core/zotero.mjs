@@ -1,4 +1,5 @@
 import { validateTaskGraph } from "./schema.mjs";
+import { rankResearchPapers } from "./retrieval.mjs";
 
 const NON_BIBLIOGRAPHIC_TYPES = new Set(["attachment", "note", "annotation"]);
 const LOCAL_API_ROOT = "http://localhost:23119/api";
@@ -38,6 +39,8 @@ function normalizeItem(item, library) {
     creators: (data.creators ?? []).map(creatorName).filter(Boolean),
     year,
     publicationTitle: data.publicationTitle || data.bookTitle || data.proceedingsTitle || null,
+    abstract: data.abstractNote || null,
+    tags: (data.tags ?? []).map((tag) => typeof tag === "string" ? tag : tag.tag).filter(Boolean),
     doi: data.DOI || null,
     url: data.url || item.links?.alternate?.href || null
   };
@@ -248,22 +251,22 @@ export async function searchZotero(taskGraph, options = {}) {
     ? (await discoverZoteroLibraries(options, runtime)).filter((candidate) => candidate.paperCount > 0)
     : [await resolveZoteroLibrary({ ...options, ...runtime })];
   if (!libraries.length) throw zoteroError("ZOTERO_NO_PAPERS", "No searchable Zotero libraries contain bibliographic papers.");
-  const results = await Promise.all(libraries.map(async (selectedLibrary) => {
+  const paperSets = await Promise.all(libraries.map(async (selectedLibrary) => {
     const url = options.baseUrl ? new URL(options.baseUrl) : libraryItemsUrl(runtime.mode, selectedLibrary);
     url.searchParams.set("format", "json");
     url.searchParams.set("include", "data");
-    url.searchParams.set("itemType", "-attachment");
-    url.searchParams.set("q", query);
-    url.searchParams.set("qmode", "titleCreatorYear");
-    url.searchParams.set("limit", String(limit));
-    const { body, response } = await fetchJson(url, runtime);
-    const totalHeader = response.headers?.get?.("Total-Results");
-    return {
-      total: totalHeader === null || totalHeader === undefined ? body.length : Number(totalHeader),
-      candidates: body.filter(isBibliographic).map((item) => normalizeItem(item, selectedLibrary))
-    };
+    const items = await fetchAllPages(url, { ...runtime, pageSize: options.pageSize });
+    return items.filter(isBibliographic).map((item) => normalizeItem(item, selectedLibrary));
   }));
-  const candidates = results.flatMap((result) => result.candidates).slice(0, limit);
+  const papers = paperSets.flat();
+  const ranked = await rankResearchPapers(query, papers, {
+    limit,
+    embeddingProvider: options.embeddingProvider ?? process.env.THESISOS_EMBEDDING_PROVIDER ?? "ollama",
+    embedTexts: options.embedTexts,
+    fetchImpl: options.embeddingFetchImpl,
+    baseUrl: options.embeddingBaseUrl,
+    model: options.embeddingModel
+  });
   const library = libraries.length === 1 ? libraries[0] : null;
 
   return {
@@ -275,7 +278,9 @@ export async function searchZotero(taskGraph, options = {}) {
     taskId: task.id,
     query,
     createdAt: new Date().toISOString(),
-    totalResults: results.reduce((sum, result) => sum + result.total, 0),
-    candidates
+    totalResults: ranked.candidates.length,
+    indexedPaperCount: papers.length,
+    retrieval: ranked.retrieval,
+    candidates: ranked.candidates
   };
 }
