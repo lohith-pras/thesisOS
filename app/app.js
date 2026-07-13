@@ -307,7 +307,7 @@ async function handleAction(action) {
   }
 }
 
-app.addEventListener("click", (event) => {
+document.addEventListener("click", (event) => {
   const view = event.target.closest("[data-view]")?.dataset.view;
   if (view) return setView(view);
   const taskId = event.target.closest("[data-task]")?.dataset.task;

@@ -386,6 +386,13 @@ test("frontend sends approval and literature search through workflow APIs", asyn
   assert.doesNotMatch(source, /task\.approvalStatus\s*=\s*"approved"/);
 });
 
+test("frontend delegates clicks from a boundary that includes body-level task modals", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+
+  assert.match(source, /document\.addEventListener\("click"/);
+  assert.doesNotMatch(source, /app\.addEventListener\("click"/);
+});
+
 test("frontend records selected papers through the evidence selection API", async () => {
   const source = await readFile(resolve("app/app.js"), "utf8");
 
