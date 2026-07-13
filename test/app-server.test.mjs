@@ -401,6 +401,14 @@ test("frontend records selected papers through the evidence selection API", asyn
   assert.match(source, /evidenceRefs/);
 });
 
+test("full library exposes the next literature action instead of presenting inert cards as selectable", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+
+  assert.match(source, /approvedLiteratureTask/);
+  assert.match(source, /Search approved literature/);
+  assert.match(source, /Review literature task/);
+});
+
 test("frontend previews and explicitly approves Obsidian note writes", async () => {
   const source = await readFile(resolve("app/app.js"), "utf8");
 
