@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 const STOP_WORDS = new Set(["about", "after", "again", "also", "been", "before", "being", "between", "could", "from", "have", "into", "more", "most", "other", "paper", "papers", "should", "than", "that", "their", "there", "these", "this", "those", "under", "using", "with", "would"]);
 
 function tokens(value) {
@@ -6,6 +8,11 @@ function tokens(value) {
 
 function paperText(paper) {
   return [paper.title, ...(paper.creators ?? []), paper.publicationTitle, paper.abstract, ...(paper.tags ?? []), paper.doi].filter(Boolean).join("\n");
+}
+
+function cacheKey(paper, text, model) {
+  const digest = createHash("sha256").update(`${model}\0${text}`).digest("hex");
+  return `${paper.sourceId ?? paper.key ?? "paper"}:${digest}`;
 }
 
 function lexicalScore(query, paper) {
@@ -63,13 +70,30 @@ export async function embedWithOllama(texts, options = {}) {
 
 export async function rankResearchPapers(query, papers, options = {}) {
   const limit = options.limit ?? 10;
+  const minimumScore = options.minimumScore ?? 0.12;
+  const model = options.model ?? process.env.THESISOS_EMBEDDING_MODEL ?? "nomic-embed-text";
   const lexical = papers.map((paper) => ({ paper, ...lexicalScore(query, paper) }));
   let embeddings = null;
   let warning = null;
+  let cacheHits = 0;
+  let cacheMisses = 0;
   if (options.embeddingProvider !== "none") {
     try {
       const embedTexts = options.embedTexts ?? ((texts) => embedWithOllama(texts, options));
-      embeddings = await embedTexts([query, ...papers.map(paperText)]);
+      const texts = papers.map(paperText);
+      const cachedPaperEmbeddings = papers.map((paper, index) => options.embeddingCache?.get(cacheKey(paper, texts[index], model)) ?? null);
+      const missingIndexes = cachedPaperEmbeddings.flatMap((embedding, index) => embedding ? [] : [index]);
+      cacheHits = papers.length - missingIndexes.length;
+      cacheMisses = missingIndexes.length;
+      const generated = await embedTexts([query, ...missingIndexes.map((index) => texts[index])]);
+      const queryEmbedding = generated[0];
+      missingIndexes.forEach((paperIndex, generatedIndex) => {
+        const embedding = generated[generatedIndex + 1];
+        cachedPaperEmbeddings[paperIndex] = embedding;
+        options.embeddingCache?.set(cacheKey(papers[paperIndex], texts[paperIndex], model), embedding);
+      });
+      await options.embeddingCache?.save();
+      embeddings = [queryEmbedding, ...cachedPaperEmbeddings];
     } catch (error) {
       warning = `Semantic embeddings unavailable: ${error.message}`;
     }
@@ -79,14 +103,21 @@ export async function rankResearchPapers(query, papers, options = {}) {
     const matchScore = embeddings ? (semanticScore * 0.75) + (entry.score * 0.25) : entry.score;
     const matchReasons = [...entry.reasons];
     if (embeddings && semanticScore > 0.45) matchReasons.unshift("Semantically similar to the approved feedback");
-    return { ...entry.paper, matchScore: Number(matchScore.toFixed(4)), semanticScore: Number(semanticScore.toFixed(4)), lexicalScore: Number(entry.score.toFixed(4)), matchReasons };
-  }).sort((a, b) => b.matchScore - a.matchScore || a.title.localeCompare(b.title));
+    const indexedFrom = entry.paper.abstract ? "abstract-backed" : "metadata-only";
+    matchReasons.push(entry.paper.abstract ? "Ranked from abstract and bibliographic metadata" : "Abstract unavailable; ranked from bibliographic metadata only");
+    return { ...entry.paper, indexedFrom, matchScore: Number(matchScore.toFixed(4)), semanticScore: Number(semanticScore.toFixed(4)), lexicalScore: Number(entry.score.toFixed(4)), matchReasons };
+  }).filter((paper) => paper.matchScore >= minimumScore).sort((a, b) => b.matchScore - a.matchScore || a.title.localeCompare(b.title));
+  const abstractCount = papers.filter((paper) => Boolean(paper.abstract?.trim())).length;
   return {
     candidates: ranked.slice(0, limit),
     retrieval: {
       mode: embeddings ? "hybrid-semantic" : "hybrid-lexical",
       embeddingProvider: embeddings ? "local" : null,
+      embeddingModel: embeddings ? model : null,
       indexedFields: ["title", "creators", "publicationTitle", "abstract", "tags", "doi"],
+      minimumScore,
+      cache: { hits: cacheHits, misses: cacheMisses },
+      coverage: { total: papers.length, withAbstract: abstractCount, metadataOnly: papers.length - abstractCount, abstractPercent: papers.length ? Math.round((abstractCount / papers.length) * 100) : 0 },
       ...(warning ? { warning } : {})
     }
   };

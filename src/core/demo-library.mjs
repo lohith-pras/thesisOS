@@ -1,4 +1,5 @@
 import { extractLiteratureQuery, requireApprovedLiteratureTask } from "./zotero.mjs";
+import { rankResearchPapers } from "./retrieval.mjs";
 
 const DEMO_LIBRARY = { type: "fixture", id: "demo", name: "ThesisOS demo library", paperCount: 3 };
 
@@ -12,6 +13,8 @@ const DEMO_PAPERS = [
     creators: [],
     year: null,
     publicationTitle: null,
+    abstract: "Distributed sensing nodes jointly process observations for integrated sensing and communication coverage.",
+    tags: ["distributed ISAC", "multisensor"],
     doi: null,
     url: null
   },
@@ -24,6 +27,8 @@ const DEMO_PAPERS = [
     creators: [],
     year: null,
     publicationTitle: null,
+    abstract: "A survey of channel models, propagation effects, and sensing-communication performance tradeoffs.",
+    tags: ["channel modeling", "survey"],
     doi: null,
     url: null
   },
@@ -36,6 +41,8 @@ const DEMO_PAPERS = [
     creators: [],
     year: null,
     publicationTitle: null,
+    abstract: "Cognitive radar adapts sensing actions from observations and learned environmental context.",
+    tags: ["cognitive radar", "adaptive sensing"],
     doi: null,
     url: null
   }
@@ -54,12 +61,10 @@ export function demoLibraryPayload() {
   };
 }
 
-export function searchDemoLibrary(taskGraph, options = {}) {
+export async function searchDemoLibrary(taskGraph, options = {}) {
   const task = requireApprovedLiteratureTask(taskGraph);
   const query = options.query?.trim() || extractLiteratureQuery(taskGraph.feedback);
-  const terms = query.toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 3);
-  const matches = DEMO_PAPERS.filter((paper) => terms.some((term) => paper.title.toLowerCase().includes(term)));
-  const candidates = matches.length ? matches : DEMO_PAPERS;
+  const ranked = await rankResearchPapers(query, DEMO_PAPERS, { limit: options.limit ?? 10, embeddingProvider: "none" });
   return {
     schemaVersion: 1,
     provider: "demo-fixture",
@@ -70,7 +75,9 @@ export function searchDemoLibrary(taskGraph, options = {}) {
     taskId: task.id,
     query,
     createdAt: new Date().toISOString(),
-    totalResults: candidates.length,
-    candidates
+    totalResults: ranked.candidates.length,
+    indexedPaperCount: DEMO_PAPERS.length,
+    retrieval: { ...ranked.retrieval, warning: "Judge mode uses deterministic metadata ranking; no Ollama or external model is required." },
+    candidates: ranked.candidates
   };
 }

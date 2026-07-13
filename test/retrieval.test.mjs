@@ -36,5 +36,22 @@ test("falls back safely when the local embedding runtime is unavailable", async 
 
   assert.equal(result.retrieval.mode, "hybrid-lexical");
   assert.match(result.retrieval.warning, /Ollama is offline/);
-  assert.equal(result.candidates.length, 2);
+  assert.equal(result.candidates.length, 1);
+});
+
+test("reuses cached paper embeddings while embedding each new query", async () => {
+  const entries = new Map();
+  const embeddingCache = { get: (key) => entries.get(key), set: (key, value) => entries.set(key, value), save: async () => {} };
+  const batches = [];
+  const embedTexts = async (texts) => {
+    batches.push(texts);
+    return texts.map((_, index) => [1, index / 10]);
+  };
+  await rankResearchPapers("first query", papers, { embedTexts, embeddingCache, minimumScore: 0 });
+  const second = await rankResearchPapers("second query", papers, { embedTexts, embeddingCache, minimumScore: 0 });
+
+  assert.equal(batches[0].length, 3);
+  assert.equal(batches[1].length, 1);
+  assert.deepEqual(second.retrieval.cache, { hits: 2, misses: 0 });
+  assert.deepEqual(second.retrieval.coverage, { total: 2, withAbstract: 2, metadataOnly: 0, abstractPercent: 100 });
 });

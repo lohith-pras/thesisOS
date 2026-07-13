@@ -1,0 +1,7 @@
+[
+  { "id": "power-control", "query": "Find methods that reduce transmit power while preserving sensing and communication performance", "expectedKeys": ["TGLKV7YS", "LAAC6RLG"] },
+  { "id": "channel-modeling", "query": "Review propagation and statistical channel models for integrated sensing and communication", "expectedKeys": ["KUVU7JG3", "H5MPQQIL"] },
+  { "id": "interference", "query": "Compare techniques for interference mitigation in network-level ISAC systems", "expectedKeys": ["6AKIJRB2", "47BAUAV3", "QB5NUBVJ"] },
+  { "id": "bistatic-rcs", "query": "Find experimental work measuring bistatic radar cross section and target reflectivity", "expectedKeys": ["QQ9CX7JM", "KW8ZC4AJ", "HA5C95AW"] },
+  { "id": "coverage", "query": "Identify base station deployment and resource optimization methods for sensing coverage", "expectedKeys": ["QZ46YDPX", "X54QIARK", "KYF5U8ZS"] }
+]

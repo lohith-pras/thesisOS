@@ -28,6 +28,13 @@ async function withServer(dependencies, run) {
   }
 }
 
+test("parses the one-command judge mode flag", async () => {
+  const { parseAppArgs } = await appServerModule();
+  assert.deepEqual(parseAppArgs(["--demo"]), { judgeMode: true });
+  assert.deepEqual(parseAppArgs([]), { judgeMode: false });
+  assert.throws(() => parseAppArgs(["--unknown"]), /Unknown app option/);
+});
+
 test("serves real Zotero connection status and papers to the frontend", async () => {
   await withServer({
     projectDir: process.cwd(),
@@ -59,6 +66,45 @@ test("serves real Zotero connection status and papers to the frontend", async ()
         { key: "B", sourceId: "group:6568124:B", itemType: "preprint", title: "Paper B", creators: [], year: null, publicationTitle: null, doi: null, url: null }
       ]
     });
+  });
+});
+
+test("judge mode starts directly with the labelled demo library", async () => {
+  await withServer({
+    judgeMode: true,
+    loadDemoLibrary: () => ({ status: "connected", mode: "demo", access: "read-only", fixture: true, library: { id: "demo", name: "ThesisOS demo library" }, libraries: [], paperCount: 3, papers: [] })
+  }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/zotero/status`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.mode, "demo");
+    assert.equal(payload.fixture, true);
+  });
+});
+
+test("judge mode falls back visibly when Codex CLI is unavailable", async () => {
+  await withServer({
+    judgeMode: true,
+    decomposeCodex: async () => { throw new Error("Codex is not installed"); }
+  }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/workflow/decompose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback: "Review literature and revise section 3.2.", provider: "codex" })
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.runtime.provider, "offline-fallback");
+    assert.match(payload.runtime.warning, /Codex is not installed/);
+    assert.ok(payload.taskGraph.tasks.length > 0);
+  });
+});
+
+test("judge mode blocks filesystem writes", async () => {
+  await withServer({ judgeMode: true }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/workflow/notes/write`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approved: true, vaultPath: "/tmp", preview: {} }) });
+    assert.equal(response.status, 403);
+    assert.match((await response.json()).message, /preview-only/);
   });
 });
 
@@ -216,6 +262,7 @@ test("attaches selected Zotero candidates as structured evidence references", as
     schemaVersion: 1,
     taskId: "task-literature",
     query: "Khalili 2025",
+    retrieval: { mode: "hybrid-semantic" },
     candidates: [{
       key: "ABC123",
       sourceId: "group:6568124:ABC123",
@@ -223,8 +270,13 @@ test("attaches selected Zotero candidates as structured evidence references", as
       title: "Distributed ISAC",
       creators: ["Ada Khalili"],
       year: "2025",
+      abstract: "A distributed sensing abstract.",
+      tags: ["ISAC"],
       doi: "10.1000/isac",
-      url: "https://example.test/isac"
+      url: "https://example.test/isac",
+      matchScore: 0.82,
+      matchReasons: ["Semantically similar"],
+      indexedFrom: "abstract-backed"
     }]
   };
 
@@ -245,8 +297,14 @@ test("attaches selected Zotero candidates as structured evidence references", as
       title: "Distributed ISAC",
       creators: ["Ada Khalili"],
       year: "2025",
+      abstract: "A distributed sensing abstract.",
+      tags: ["ISAC"],
       doi: "10.1000/isac",
-      url: "https://example.test/isac"
+      url: "https://example.test/isac",
+      matchScore: 0.82,
+      matchReasons: ["Semantically similar"],
+      indexedFrom: "abstract-backed",
+      retrievalMode: "hybrid-semantic"
     });
   });
 });
@@ -276,6 +334,28 @@ test("previews an evidence-linked Obsidian note without writing a file", async (
     assert.match(payload.markdown, /group:6568124:ABC123/);
     assert.match(payload.markdown, /https:\/\/doi\.org\/10\.1000\/isac/);
     assert.equal(payload.writeApproved, false);
+  });
+});
+
+test("drafting requires consent and falls back without inventing citations", async () => {
+  const evidenceRefs = [{ sourceId: "group:1:A", title: "Paper A", abstract: "Evidence abstract" }];
+  await withServer({ draftOpenAI: async () => { throw new Error("No API credits"); } }, async (baseUrl) => {
+    const refused = await fetch(`${baseUrl}/api/workflow/notes/draft`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback: "Review", evidenceRefs }) });
+    assert.equal(refused.status, 400);
+    const response = await fetch(`${baseUrl}/api/workflow/notes/draft`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback: "Review", evidenceRefs, approvedExternalProcessing: true }) });
+    const payload = await response.json();
+    assert.equal(payload.provider, "deterministic-template");
+    assert.equal(payload.sourceNotes[0].sourceId, "group:1:A");
+    assert.match(payload.warning, /No API credits/);
+  });
+});
+
+test("note preview rejects a draft that cites evidence the user did not select", async () => {
+  const evidenceRefs = [{ sourceId: "group:1:A", title: "Paper A" }];
+  await withServer({}, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/workflow/notes/preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: "Test", feedback: "Review", evidenceRefs, draft: { overview: "Unsafe", sourceNotes: [{ sourceId: "group:1:B", summary: "Invented", relevance: "Unknown" }] } }) });
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).message, /unselected source/);
   });
 });
 

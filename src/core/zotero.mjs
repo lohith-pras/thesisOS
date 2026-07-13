@@ -1,5 +1,6 @@
 import { validateTaskGraph } from "./schema.mjs";
 import { rankResearchPapers } from "./retrieval.mjs";
+import { openEmbeddingCache } from "./embedding-cache.mjs";
 
 const NON_BIBLIOGRAPHIC_TYPES = new Set(["attachment", "note", "annotation"]);
 const LOCAL_API_ROOT = "http://localhost:23119/api";
@@ -259,13 +260,16 @@ export async function searchZotero(taskGraph, options = {}) {
     return items.filter(isBibliographic).map((item) => normalizeItem(item, selectedLibrary));
   }));
   const papers = paperSets.flat();
+  const embeddingCache = options.embeddingCache ?? (options.cachePath ? await openEmbeddingCache(options.cachePath) : null);
   const ranked = await rankResearchPapers(query, papers, {
     limit,
     embeddingProvider: options.embeddingProvider ?? process.env.THESISOS_EMBEDDING_PROVIDER ?? "ollama",
     embedTexts: options.embedTexts,
     fetchImpl: options.embeddingFetchImpl,
     baseUrl: options.embeddingBaseUrl,
-    model: options.embeddingModel
+    model: options.embeddingModel,
+    embeddingCache,
+    minimumScore: options.minimumScore ?? Number(process.env.THESISOS_RETRIEVAL_MINIMUM_SCORE ?? 0.12)
   });
   const library = libraries.length === 1 ? libraries[0] : null;
 

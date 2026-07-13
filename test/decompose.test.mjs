@@ -386,6 +386,7 @@ test("searches all selected libraries without collapsing equal Zotero item keys"
   const artifact = await searchZotero(graph, {
     allLibraries: true,
     embeddingProvider: "none",
+    minimumScore: 0,
     fetchImpl: async (url) => {
       if (url.pathname.endsWith("/groups")) return zoteroResponse([{ id: 10, data: { name: "Research" } }]);
       const title = url.pathname.includes("/users/0/") ? "Personal result" : "Group result";
