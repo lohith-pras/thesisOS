@@ -60,7 +60,8 @@ function icon(name) { return ({ overview: "⌂", profile: "◎", tasks: "✓", e
 function button(label, action, kind = "dark", disabled = false) { return `<button class="button button-${kind}" data-action="${action}"${disabled ? " disabled" : ""}>${label}</button>`; }
 function eyebrow(text) { return `<p class="eyebrow"><i></i>${text}</p>`; }
 function emptyState(title, copy, action = "", label = "") { return `<section class="empty-state panel"><span class="empty-mark">◇</span><div><h2>${esc(title)}</h2><p>${esc(copy)}</p></div>${action ? button(label, action, "outline") : ""}</section>`; }
-function profileCardLoading(formId, label) { return state.activeProfileForm === formId ? `<div class="profile-card-loading" role="status" aria-live="polite"><span class="activity-dots" aria-hidden="true">${Array.from({ length: 9 }, (_, index) => `<i style="--dot-index:${index}"></i>`).join("")}</span><strong>${esc(label)}</strong></div>` : ""; }
+function activityMarker() { return '<span class="activity-marker" aria-hidden="true"></span>'; }
+function profileCardLoading(formId, label) { return state.activeProfileForm === formId ? `<div class="profile-card-loading" role="status" aria-live="polite">${activityMarker()}<strong>${esc(label)}</strong></div>` : ""; }
 function documentDropZone() { return `<label class="drop-zone" data-drop-zone><input name="document" type="file" accept=".pdf,.md,.txt,application/pdf,text/markdown,text/plain" required /><span class="drop-icon">⇧</span><strong>Choose a project document</strong><small data-file-label>PDF, Markdown, or text · up to 20 MB</small></label>`; }
 async function fileToBase64(file) { const bytes = new Uint8Array(await file.arrayBuffer()); let binary = ""; for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000)); return btoa(binary); }
 
@@ -103,7 +104,7 @@ function activityStrip() {
   const activity = state.activity || defaultState.activity;
   if (activity.status === "idle") return "";
   const marker = activity.status === "active"
-    ? `<span class="activity-dots" aria-hidden="true">${Array.from({ length: 9 }, (_, index) => `<i style="--dot-index:${index}"></i>`).join("")}</span>`
+    ? activityMarker()
     : `<span class="activity-mark" aria-hidden="true">${activity.status === "success" ? "✓" : "!"}</span>`;
   const recovery = activity.status === "error" && activity.recoveryAction ? button("Try again", activity.recoveryAction, "outline") : "";
   return `<div class="global-activity ${activity.status}" role="status" aria-live="polite"><div class="activity-copy">${marker}<span><strong>${esc(activity.label)}</strong>${activity.detail ? `<small>${esc(activity.detail)}</small>` : ""}</span></div>${recovery}</div>`;
@@ -113,7 +114,7 @@ function sectionActivity(kinds = []) {
   const activity = state.activity || defaultState.activity;
   if (activity.status === "idle" || !kinds.includes(activity.kind)) return "";
   const marker = activity.status === "active"
-    ? `<span class="activity-dots" aria-hidden="true">${Array.from({ length: 9 }, (_, index) => `<i style="--dot-index:${index}"></i>`).join("")}</span>`
+    ? activityMarker()
     : `<span class="activity-mark" aria-hidden="true">${activity.status === "success" ? "✓" : "!"}</span>`;
   return `<div class="section-activity ${activity.status}" aria-hidden="true"><div class="activity-copy">${marker}<span><strong>${esc(activity.label)}</strong>${activity.detail ? `<small>${esc(activity.detail)}</small>` : ""}</span></div></div>`;
 }
@@ -350,6 +351,23 @@ function connectZotero() { return requestConnection("/api/zotero/status"); }
 function connectDemoLibrary() { return requestConnection("/api/demo/library"); }
 function selectZotero(library) { return requestConnection("/api/zotero/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ library }) }); }
 
+function closeTaskModal() {
+  const modal = document.querySelector(".modal-backdrop");
+  if (!modal || modal.dataset.closing === "true") return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    modal.remove();
+    return;
+  }
+
+  modal.dataset.closing = "true";
+  modal.classList.add("is-closing");
+  const remove = () => modal.remove();
+  modal.addEventListener("transitionend", (event) => {
+    if (event.target === modal) remove();
+  }, { once: true });
+  window.setTimeout(remove, 180);
+}
+
 function openTask(id) {
   const task = getTask(id);
   if (!task) return;
@@ -541,14 +559,14 @@ async function handleAction(action) {
       if (payload.state?.schemaVersion === 3) state.projectState = payload.state;
       state.tasks = payload.taskGraph.tasks;
       const shouldSearchLiterature = verb === "approve-task" && state.tasks.find((task) => task.id === taskId)?.kind === "literature" && state.connection.status === "connected";
-      document.querySelector(".modal-backdrop")?.remove();
+      closeTaskModal();
       saveState();
       if (shouldSearchLiterature) return handleAction("search-zotero");
       completeActivity("Review decision saved.", "The task graph now reflects your approval boundary.");
       render();
     } catch (error) {
       failActivity(error, `open-literature-task`);
-      document.querySelector(".modal-backdrop")?.remove();
+      closeTaskModal();
       openTask(taskId);
     }
     return;
@@ -556,7 +574,7 @@ async function handleAction(action) {
   if (action === "search-zotero") {
     if (state.workflowBusy) return;
     beginActivity("zotero-search", "Searching Zotero for the approved task…", "Ranking read-only library metadata.", "search-zotero");
-    document.querySelector(".modal-backdrop")?.remove();
+    closeTaskModal();
     try {
       const response = await fetch("/api/workflow/search", {
         method: "POST",
@@ -591,7 +609,7 @@ document.addEventListener("click", (event) => {
   if (taskId) return openTask(taskId);
   const action = event.target.closest("[data-action]")?.dataset.action;
   if (action) return handleAction(action);
-  if (event.target.closest("[data-close-modal]")) document.querySelector(".modal-backdrop")?.remove();
+  if (event.target.closest("[data-close-modal]")) closeTaskModal();
 });
 
 document.addEventListener("dragover", (event) => {
