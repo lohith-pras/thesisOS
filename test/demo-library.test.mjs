@@ -23,6 +23,7 @@ test("generated evidence notes include a structured read model alongside Markdow
   const preview = createObsidianNotePreview({ project: "EV flexibility", feedback: "Support the congestion claim.", evidenceRefs: [reference], draft: { overview: "Compare tariff and capacity-management evidence.", sourceNotes: [{ sourceId: reference.sourceId, summary: "Tariff design can create local peaks.", relevance: "Qualifies the congestion claim." }] } });
   assert.equal(preview.readModel.sources[0].sourceId, reference.sourceId);
   assert.equal(preview.readModel.sources[0].summary, "Tariff design can create local peaks.");
+  assert.equal(preview.readModel.synthesis.styleReview.passed, true);
 });
 
 test("demo drafting gives each selected paper a distinct, feedback-relevant role", () => {

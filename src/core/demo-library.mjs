@@ -16,9 +16,9 @@ const DEMO_PAPERS = [
 ];
 
 export const DEMO_FEEDBACK_OPTIONS = [
-  { id: "vague", title: "Vague feedback", text: "The motivation is still too broad. Clarify which distribution-grid problem workplace EV charging creates and ground the framing in recent literature." },
-  { id: "claim", title: "Challenge a claim", text: "The claim that smart charging reduces local congestion is too strong. Separate tariff-driven load shifting from network-aware capacity management and support each statement with evidence." },
-  { id: "feasibility", title: "Test feasibility", text: "Explain whether EVs that cannot resume delayed charging change the feasibility assumptions in the proposed workplace charging strategy." }
+  { id: "framing", title: "Qualify an overclaim", text: "The claim that smart charging reduces local congestion is too strong. Separate tariff-driven load shifting from network-aware capacity management, and show which evidence supports or qualifies each statement.", outcome: "Shows counter-evidence, bounded claims, and a traceable evidence note." },
+  { id: "boundary", title: "Protect a model boundary", text: "For the system model, do not imply that a tariff alone solves congestion. State the network constraint, the control decision, and the assumptions that must hold before making that claim.", outcome: "Turns an ambiguous comment into a scoped, reviewable model decision." },
+  { id: "feasibility", title: "Expose a real-world constraint", text: "Before treating delayed charging as available flexibility, explain whether vehicles can reliably pause and resume. Keep this deployment limitation visible in the feasibility assumptions.", outcome: "Connects a practical limitation to literature, tasks, and the final trail." }
 ];
 
 export function demoLibraryPayload() {
@@ -26,10 +26,10 @@ export function demoLibraryPayload() {
 }
 
 export function createDemoProjectState() {
-  const state = createProjectState({ project: "Workplace EV charging flexibility for distribution-grid congestion management" }, { now: "2026-07-14T00:00:00.000Z" });
+  const state = createProjectState({ project: "Workplace EV charging flexibility" }, { now: "2026-07-14T00:00:00.000Z" });
   state.profile = {
     ...state.profile,
-    title: { value: "Workplace EV charging flexibility for distribution-grid congestion management", provenance: { kind: "demo-fixture" } },
+    title: { value: "Workplace EV charging flexibility", provenance: { kind: "demo-fixture" } },
     topic: { value: "How network-aware smart charging can use workplace EV flexibility without overstating tariff or vehicle-capability assumptions.", provenance: { kind: "demo-fixture" } },
     objectives: [
       { id: "objective-grid", text: "Assess how workplace EV charging contributes to low-voltage distribution-grid congestion.", provenance: { kind: "demo-fixture" } },

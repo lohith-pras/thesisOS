@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, resolve } from "node:path";
-import { validateGroundedDraft } from "./note-drafting.mjs";
+import { compactEvidenceText, validateGroundedDraft } from "./note-drafting.mjs";
 
 function requireText(value, label) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required.`);
@@ -20,7 +20,7 @@ export function createEvidenceNoteReadModel({ project, feedback, evidenceRefs, d
     schemaVersion: 1,
     title: preview.title,
     feedback: requireText(feedback, "Supervisor feedback"),
-    synthesis: draft ? { overview: draft.overview, provider: draft.provider, model: draft.model ?? null } : null,
+    synthesis: draft ? { overview: compactEvidenceText(draft.overview, 60, 2), provider: draft.provider, model: draft.model ?? null, styleReview: draft.styleReview ?? null } : null,
     sources: evidenceRefs.map((reference, index) => {
       const sourceNote = draft?.sourceNotes?.find((note) => note.sourceId === reference.sourceId) ?? null;
       return {
@@ -31,8 +31,8 @@ export function createEvidenceNoteReadModel({ project, feedback, evidenceRefs, d
         venue: reference.publicationTitle ?? null,
         doi: reference.doi ?? null,
         sourceUrl: reference.doi ? `https://doi.org/${reference.doi}` : reference.url ?? null,
-        summary: sourceNote?.summary ?? null,
-        relevance: sourceNote?.relevance ?? null
+        summary: sourceNote?.summary ? compactEvidenceText(sourceNote.summary, 32) : null,
+        relevance: sourceNote?.relevance ? compactEvidenceText(sourceNote.relevance, 20) : null
       };
     })
   };
@@ -42,7 +42,7 @@ export function createObsidianNotePreview({ project, feedback, evidenceRefs, dra
   const projectName = requireText(project, "Project name");
   const sourceFeedback = requireText(feedback, "Supervisor feedback");
   if (!Array.isArray(evidenceRefs) || evidenceRefs.length === 0) throw new Error("At least one evidence reference is required.");
-  if (draft) validateGroundedDraft(draft, evidenceRefs);
+  const groundedDraft = draft ? validateGroundedDraft(draft, evidenceRefs) : null;
   const title = `Literature evidence — ${projectName}`;
   const filename = `${slugify(title)}.md`;
   const createdAt = options.now ?? new Date().toISOString();
@@ -53,11 +53,11 @@ export function createObsidianNotePreview({ project, feedback, evidenceRefs, dra
     const primaryLink = reference.doi ? `https://doi.org/${reference.doi}` : reference.url;
     return `## ${index + 1}. ${paperTitle}\n\n- Authors: ${authors}\n- Year: ${reference.year ?? "Not recorded"}\n- Zotero source ID: \`${sourceId}\`\n- Zotero item key: \`${reference.key ?? "Not recorded"}\`\n- Library: ${reference.library?.name ?? reference.library?.id ?? "Not recorded"}\n- DOI: ${reference.doi ? `[${reference.doi}](https://doi.org/${reference.doi})` : "Not recorded"}\n- Source link: ${primaryLink ? `[Open source](${primaryLink})` : "Not recorded"}\n\n### Researcher review\n\n- Claim:\n- Method:\n- Limitation:\n- Relevance to feedback:\n`;
   }).join("\n");
-  const synthesis = draft ? `## Grounded synthesis\n\n${draft.overview}\n\n${draft.sourceNotes.map((note) => `### [${note.sourceId}]\n\n${note.summary}\n\n**Relevance:** ${note.relevance}`).join("\n\n")}\n\n> Draft provider: ${draft.provider}${draft.model && draft.model !== "none" ? ` · ${draft.model}` : ""}. Verify every statement before thesis use.\n\n` : "";
+  const synthesis = groundedDraft ? `## Grounded synthesis\n\n${groundedDraft.overview}\n\n${groundedDraft.sourceNotes.map((note) => `### [${note.sourceId}]\n\n${note.summary}\n\n**Relevance:** ${note.relevance}`).join("\n\n")}\n\n> Draft provider: ${groundedDraft.provider}${groundedDraft.model && groundedDraft.model !== "none" ? ` · ${groundedDraft.model}` : ""}. Verify every statement before thesis use.\n\n` : "";
   const markdown = `---\ntitle: ${yamlString(title)}\nproject: ${yamlString(projectName)}\ncreated: ${yamlString(createdAt)}\nsource_count: ${evidenceRefs.length}\nmanaged_by: thesisos\ntags:\n  - thesisos\n  - literature-evidence\n---\n\n# ${title}\n\n## Supervisor feedback\n\n> ${sourceFeedback.replaceAll("\n", "\n> ")}\n\n${synthesis}## Evidence sources\n\n${sources}`;
 
   const preview = { schemaVersion: 1, title, filename, createdAt, sourceCount: evidenceRefs.length, markdown, writeApproved: false };
-  return { ...preview, readModel: createEvidenceNoteReadModel({ project: projectName, feedback: sourceFeedback, evidenceRefs, draft }, preview) };
+  return { ...preview, readModel: createEvidenceNoteReadModel({ project: projectName, feedback: sourceFeedback, evidenceRefs, draft: groundedDraft }, preview) };
 }
 
 export async function writeObsidianNote(preview, { vaultPath, approved, mkdirImpl = mkdir, readFileImpl = readFile, writeFileImpl = writeFile } = {}) {

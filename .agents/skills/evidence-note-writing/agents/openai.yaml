@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence Note Writing"
+  short_description: "Grounded, concise thesis-note drafting"
+  default_prompt: "Use $evidence-note-writing to draft a precise, source-bound evidence note."

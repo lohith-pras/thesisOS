@@ -17,7 +17,7 @@ import { createDeterministicDraft, draftEvidenceNoteWithOpenAI } from "./core/no
 import { createDemoGroundedDraft, createDemoProjectState, decomposeDemoFeedback, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
 import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
 import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault } from "./core/obsidian-vault.mjs";
-import { acceptProfileProposal, answerProfileQuestions, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordFeedback, recordFeedbackTasks, recordProjectDocument, reviewCanonicalTask, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
+import { acceptProfileProposal, answerProfileQuestions, consolidateFeedbackThreads, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordProjectDocument, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
 import { scanThesisCheckout } from "./core/thesis-scan.mjs";
 import { extractProjectDocument } from "./core/project-document.mjs";
 import { proposeProfileWithCodex, proposeProfileWithOpenAI } from "./core/profile-extraction.mjs";
@@ -25,9 +25,12 @@ import { buildThesisContext } from "./core/thesis-context.mjs";
 import { mapBibliographyToSources } from "./core/citation-mapping.mjs";
 import { createPaperCard, paperMap } from "./core/paper-map.mjs";
 import { auditObsidianVault } from "./core/vault-audit.mjs";
-import { attachCanonicalEvidence, recordCanonicalDraft, workflowReadModel } from "./core/workflow.mjs";
+import { workflowReadModel } from "./core/workflow.mjs";
+import { createRevisionWorkflow } from "./core/revision-workflow.mjs";
+import { createWorkflowRuntime } from "./core/workflow-runtime.mjs";
 import { createRevisionResponseMatrix } from "./core/revision-response-matrix.mjs";
 import { createClaimTraceback } from "./core/claim-traceback.mjs";
+import { reconcileSeedReferences } from "./core/seed-reference-reconciliation.mjs";
 
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_DIR = resolve(SOURCE_DIR, "..");
@@ -148,16 +151,27 @@ export function createAppServer(dependencies = {}) {
   const buildPaperMap = dependencies.paperMap ?? paperMap;
   const auditVault = dependencies.auditVault ?? auditObsidianVault;
   const canonicalStatePath = resolve(projectDir, ".thesisos", "thesis-state.json");
-  let judgeState = judgeMode ? createDemoProjectState() : null;
-  const stateExists = async () => {
-    if (judgeState) return true;
-    try { await access(canonicalStatePath); return true; } catch { return false; }
+  const runtime = createWorkflowRuntime({
+    judgeMode,
+    statePath: canonicalStatePath,
+    accessState: access,
+    loadStateFile: loadProjectState,
+    saveStateFile: saveProjectState,
+    createDemoState: createDemoProjectState,
+    demoLibrary: loadDemoLibrary,
+    decomposeDemo,
+    searchDemo,
+    draftDemo
+  });
+  const stateExists = () => runtime.stateExists();
+  const loadCanonicalState = async () => {
+    const state = await runtime.loadState();
+    const consolidated = consolidateFeedbackThreads(state);
+    if (consolidated === state) return state;
+    await runtime.saveState(consolidated);
+    return consolidated;
   };
-  const loadCanonicalState = async () => judgeState ?? loadProjectState(canonicalStatePath);
-  const persistCanonicalState = async (state) => {
-    if (judgeMode) { judgeState = state; return state; }
-    return saveProjectState(canonicalStatePath, state);
-  };
+  const persistCanonicalState = (state) => runtime.saveState(state);
   const loadConfiguredVaultRoot = async () => {
     if (await stateExists()) {
       const state = await loadCanonicalState();
@@ -174,16 +188,12 @@ export function createAppServer(dependencies = {}) {
     }
     return configuredRoot;
   };
-  const canonicalWorkflow = (state) => {
-    const thread = state.feedbackThreads.at(-1);
+  const revisionWorkflow = createRevisionWorkflow({ loadState: loadCanonicalState, persistState: persistCanonicalState, previewNote });
+  const canonicalWorkflow = (state, feedbackThreadId = null) => {
+    const thread = feedbackThreadId ? state.feedbackThreads.find(({ id }) => id === feedbackThreadId) : state.feedbackThreads.at(-1);
     if (!thread) return null;
     const workflow = workflowReadModel(state, thread.id);
-    const preview = workflow.draft ? previewNote({
-      project: state.project.name,
-      feedback: workflow.feedback,
-      evidenceRefs: workflow.selectedEvidence,
-      draft: workflow.draft
-    }) : null;
+    const preview = workflow.draft ? previewNote({ project: state.project.name, feedback: workflow.feedback, evidenceRefs: workflow.selectedEvidence, draft: workflow.draft }) : null;
     return { ...workflow, preview };
   };
 
@@ -194,6 +204,12 @@ export function createAppServer(dependencies = {}) {
         if (!await stateExists()) { sendJson(response, 200, { initialized: false }); return; }
         const state = await loadCanonicalState();
         sendJson(response, 200, { initialized: true, state, readiness: profileReadiness(state), workflow: canonicalWorkflow(state) });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/workflow") {
+        if (!await stateExists()) throw httpError(409, "Create a thesis workspace before opening feedback history.");
+        try { sendJson(response, 200, await revisionWorkflow.read(url.searchParams.get("feedbackThreadId"))); }
+        catch (error) { throw httpError(error.code === "NOT_FOUND" ? 404 : 400, error.message); }
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/revision-response-matrix") {
@@ -229,9 +245,15 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/project/feedback") {
         const body = await readJsonBody(request);
-        const state = recordFeedback(await loadCanonicalState(), body);
-        await persistCanonicalState(state);
-        sendJson(response, 201, { state, readiness: profileReadiness(state), feedbackThread: state.feedbackThreads.at(-1) });
+        const result = await revisionWorkflow.capture(body);
+        sendJson(response, result.deduplication === "already_saved" ? 200 : 201, result);
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/feedback/placement") {
+        const body = await readJsonBody(request);
+        try {
+          sendJson(response, 200, await revisionWorkflow.confirmPlacement(body));
+        } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/paths") {
@@ -308,8 +330,8 @@ export function createAppServer(dependencies = {}) {
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/zotero/status") {
-        if (judgeMode) {
-          sendJson(response, 200, loadDemoLibrary());
+        if (runtime.kind === "judge") {
+          sendJson(response, 200, runtime.library());
           return;
         }
         const savedLibrary = await loadSelection(projectDir);
@@ -317,14 +339,20 @@ export function createAppServer(dependencies = {}) {
         sendJson(response, 200, connectionPayload(artifact));
         return;
       }
+      if (request.method === "POST" && url.pathname === "/api/project/seed-references/reconcile") {
+        const state = await loadCanonicalState();
+        const library = runtime.kind === "judge" ? runtime.library() : connectionPayload(await listPapers(await loadSelection(projectDir)));
+        sendJson(response, 200, { report: reconcileSeedReferences(state.profile?.seedReferences, library.papers ?? []), advisory: true });
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/demo/library") {
-        sendJson(response, 200, loadDemoLibrary());
+        sendJson(response, 200, runtime.library() ?? loadDemoLibrary());
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/demo/restart") {
-        if (!judgeMode) throw httpError(403, "Demo restart is only available in judge mode.");
-        judgeState = createDemoProjectState();
-        sendJson(response, 200, { state: judgeState, readiness: profileReadiness(judgeState), connection: loadDemoLibrary() });
+        if (!runtime.capabilities.restartDemo) throw httpError(403, "Demo restart is only available in judge mode.");
+        const state = await runtime.restart();
+        sendJson(response, 200, { state, readiness: profileReadiness(state), connection: runtime.library() });
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/obsidian/status") {
@@ -344,7 +372,7 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/obsidian/audit") {
         const body = await readJsonBody(request);
-        if (judgeMode) throw httpError(403, "Judge mode cannot inspect a local vault.");
+        if (!runtime.capabilities.inspectVault) throw httpError(403, "Judge mode cannot inspect a local vault.");
         const vaultRoot = await requireConfiguredVaultRoot(body.vaultPath);
         try {
           sendJson(response, 200, await auditVault(vaultRoot));
@@ -387,12 +415,13 @@ export function createAppServer(dependencies = {}) {
         }
 
         const canonical = await stateExists() ? await loadCanonicalState() : null;
-        const context = canonical ? buildThesisContext(canonical, "decomposition", { feedback }) : null;
+        const feedbackThread = canonical && body.feedbackThreadId ? canonical.feedbackThreads.find(({ id }) => id === body.feedbackThreadId) : null;
+        const context = canonical ? buildThesisContext(canonical, "decomposition", { feedback, placement: feedbackThread?.placement }) : null;
         let runtimeProvider = provider;
         let runtimeWarning;
         let taskGraph;
-        if (judgeMode) {
-          taskGraph = await decomposeDemo(feedback, context ? { context } : undefined);
+        if (runtime.decompose) {
+          taskGraph = await runtime.decompose(feedback, context ? { context } : undefined);
           runtimeProvider = "offline-fallback";
           runtimeWarning = "Judge mode uses deterministic task decomposition and does not call an external model.";
         } else if (provider === "codex") {
@@ -416,9 +445,8 @@ export function createAppServer(dependencies = {}) {
             for (const id of targetLocationIds) if (!knownLocations.has(id)) throw httpError(422, `Task '${task.id}' references unknown manuscript location '${id}'.`);
             return { ...task, objectiveIds, targetLocationIds };
           }) };
-          const persisted = recordFeedbackTasks(canonical, { feedback, title: body.title, taskGraph, context }, { expectedRevision: body.expectedRevision });
-          await persistCanonicalState(persisted);
-          sendJson(response, 200, { taskGraph, state: persisted, context, readiness: profileReadiness(persisted), runtime: { provider: runtimeProvider, model: body.model || (provider === "openai" ? DEFAULT_MODEL : provider === "offline" ? "deterministic-v1" : "codex-default"), validated: true, ...(runtimeWarning ? { warning: runtimeWarning } : {}) } });
+          const persisted = await revisionWorkflow.persistTaskGraph({ feedback, title: body.title, taskGraph, context, feedbackThreadId: body.feedbackThreadId ?? null, expectedRevision: body.expectedRevision });
+          sendJson(response, 200, { taskGraph, ...persisted, context, runtime: { provider: runtimeProvider, model: body.model || (provider === "openai" ? DEFAULT_MODEL : provider === "offline" ? "deterministic-v1" : "codex-default"), validated: true, ...(runtimeWarning ? { warning: runtimeWarning } : {}) } });
           return;
         }
         const state = createThesisState({ project, feedback, taskGraph });
@@ -439,10 +467,8 @@ export function createAppServer(dependencies = {}) {
         const body = await readJsonBody(request);
         if (body.feedbackThreadId && await stateExists()) {
           try {
-            const state = reviewCanonicalTask(await loadCanonicalState(), body);
-            await persistCanonicalState(state);
-            const workflow = workflowReadModel(state, body.feedbackThreadId);
-            sendJson(response, 200, { state, taskGraph: workflow.taskGraph });
+            const result = await revisionWorkflow.reviewTask(body);
+            sendJson(response, 200, { ...result, taskGraph: result.workflow.taskGraph });
           } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
           return;
         }
@@ -462,19 +488,21 @@ export function createAppServer(dependencies = {}) {
           const state = await loadCanonicalState();
           const thread = state.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
           if (!thread) throw httpError(404, "Feedback thread was not found.");
-          const context = buildThesisContext(state, "retrieval", { feedback: thread.feedback });
+          const context = buildThesisContext(state, "retrieval", { feedback: thread.feedback, placement: thread.placement });
           const taskGraph = workflowReadModel(state, thread.id).taskGraph;
           const query = typeof body.query === "string" && body.query.trim() ? body.query.trim() : context.query;
-          if (body.mode === "demo") sendJson(response, 200, await searchDemo(taskGraph, { query }));
+          let artifact;
+          if (body.mode === "demo" || runtime.search) artifact = await (runtime.search ? runtime.search(taskGraph, { query }) : searchDemo(taskGraph, { query }));
           else {
             const savedLibrary = await loadSelection(projectDir);
-            sendJson(response, 200, await searchPapers(taskGraph, { ...(savedLibrary ? { savedLibrary } : {}), query, cachePath: resolve(projectDir, ".thesisos-cache", "zotero-embeddings.json") }));
+            artifact = await searchPapers(taskGraph, { ...(savedLibrary ? { savedLibrary } : {}), query, cachePath: resolve(projectDir, ".thesisos-cache", "zotero-embeddings.json") });
           }
+          sendJson(response, 200, { ...artifact, retrievalAudit: { query, projection: context } });
           return;
         }
-        if (body.mode === "demo") {
+        if (body.mode === "demo" || runtime.search) {
           try {
-            sendJson(response, 200, await searchDemo(body.taskGraph, { query: body.query }));
+            sendJson(response, 200, await (runtime.search ? runtime.search(body.taskGraph, { query: body.query }) : searchDemo(body.taskGraph, { query: body.query })));
           } catch (error) {
             throw httpError(409, error.message);
           }
@@ -498,10 +526,8 @@ export function createAppServer(dependencies = {}) {
         const body = await readJsonBody(request);
         if (body.feedbackThreadId && await stateExists()) {
           try {
-            const state = attachCanonicalEvidence(await loadCanonicalState(), body, { searchArtifact: body.searchArtifact });
-            await persistCanonicalState(state);
-            const workflow = canonicalWorkflow(state);
-            sendJson(response, 200, { state, workflow, taskGraph: workflow.taskGraph, selection: workflow.evidenceSelection });
+            const result = await revisionWorkflow.attachEvidence(body);
+            sendJson(response, 200, { ...result, taskGraph: result.workflow.taskGraph, selection: result.workflow.evidenceSelection });
           } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
           return;
         }
@@ -530,10 +556,13 @@ export function createAppServer(dependencies = {}) {
         const selectedEvidence = canonical
           ? canonical.evidence.filter((record) => record.feedbackThreadId === body.feedbackThreadId && record.taskId === body.taskId)
           : body.evidenceRefs;
-        const draftInput = canonical ? { ...body, feedback: thread.feedback, evidenceRefs: selectedEvidence } : body;
+        const draftingContext = canonical && profileReadiness(canonical).ready
+          ? buildThesisContext(canonical, "drafting", { feedback: thread.feedback, placement: thread.placement, selectedEvidenceIds: selectedEvidence.map(({ sourceId }) => sourceId) })
+          : null;
+        const draftInput = canonical ? { ...body, feedback: thread.feedback, evidenceRefs: selectedEvidence, thesisContext: draftingContext } : body;
         let draft;
         try {
-          if (judgeMode) draft = draftDemo(draftInput.feedback, draftInput.evidenceRefs);
+          if (runtime.draft) draft = await runtime.draft(draftInput.feedback, draftInput.evidenceRefs);
           else if (body.provider === "codex") draft = await draftCodex(draftInput, { model: body.model, cwd: projectDir });
           else draft = await draftOpenAI(draftInput, { model: body.model });
         } catch (error) {
@@ -542,9 +571,8 @@ export function createAppServer(dependencies = {}) {
         }
         if (canonical) {
           try {
-            const state = recordCanonicalDraft(canonical, { ...body, draft }, { provider: draft.provider ?? body.provider, model: draft.model ?? body.model });
-            await persistCanonicalState(state);
-            sendJson(response, 200, { ...draft, state, workflow: canonicalWorkflow(state) });
+            const result = await revisionWorkflow.recordDraft({ ...body, draft }, { provider: draft.provider ?? body.provider, model: draft.model ?? body.model });
+            sendJson(response, 200, { ...draft, ...result });
           } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
           return;
         }
@@ -552,7 +580,7 @@ export function createAppServer(dependencies = {}) {
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/workflow/notes/write") {
-        if (judgeMode) throw httpError(403, "Judge mode is preview-only and cannot write to the filesystem.");
+        if (!runtime.capabilities.writeVault) throw httpError(403, "Judge mode is preview-only and cannot write to the filesystem.");
         const body = await readJsonBody(request);
         const vaultRoot = await requireConfiguredVaultRoot(body.vaultPath);
         try {

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { selectEvidenceReferences } from "./evidence.mjs";
+import { createFeedbackThreadTrail } from "./evidence-trail.mjs";
 import { validateProjectState } from "./project-state.mjs";
 import { validateGroundedDraft } from "./note-drafting.mjs";
 
@@ -80,8 +81,9 @@ export function attachCanonicalEvidence(state, input, options = {}) {
 export function workflowReadModel(state, feedbackThreadId) {
   validateProjectState(state);
   const thread = requireThread(state, feedbackThreadId);
-  const selectedEvidence = state.evidence.filter((record) => record.feedbackThreadId === thread.id);
-  const draft = selectedEvidence.find((record) => record.draft)?.draft ?? null;
+  const trail = createFeedbackThreadTrail(state, feedbackThreadId);
+  const selectedEvidence = trail.tasks.flatMap((task) => task.evidence);
+  const draft = trail.tasks.find((task) => task.draft)?.draft ?? null;
   const approvedLiteratureTask = thread.tasks.find((task) => task.kind === "literature" && task.approvalStatus === "approved");
   const nextAllowedAction = !approvedLiteratureTask
     ? { id: "review-tasks", label: "Review the literature task before selecting evidence" }
@@ -93,6 +95,7 @@ export function workflowReadModel(state, feedbackThreadId) {
   return {
     feedbackThreadId: thread.id,
     feedback: thread.feedback,
+    placement: trail.placement,
     tasks: thread.tasks,
     taskGraph: taskGraphForThread(thread),
     selectedEvidence,
@@ -103,6 +106,7 @@ export function workflowReadModel(state, feedbackThreadId) {
       evidenceRefs: selectedEvidence
     } : null,
     draft,
+    trail,
     draftStatus: draft ? "available" : "not_started",
     previewStatus: selectedEvidence.some((record) => record.preview) ? "available" : "not_started",
     nextAllowedAction

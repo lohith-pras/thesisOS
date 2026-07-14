@@ -213,6 +213,7 @@ test("drafts a grounded note through the authenticated Codex CLI adapter", async
   assert.equal(invocation.schema.type, "object");
   assert.equal(invocation.cwd, "/tmp/test-project");
   assert.match(invocation.prompt, /Paper A/);
+  assert.match(invocation.prompt, /Avoid generic significance claims/);
 });
 
 test("applies review decisions to both artifacts", () => {

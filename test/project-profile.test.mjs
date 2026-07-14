@@ -66,6 +66,31 @@ test("captures feedback before thesis context is sufficient", () => {
   assert.equal(captured.events.at(-1).type, "feedback.captured");
 });
 
+test("turns captured feedback into tasks once the profile becomes ready", () => {
+  let state = createProjectState({ project: "ISAC thesis" });
+  state = {
+    ...state,
+    profile: {
+      title: { value: "Cognitive ISAC" },
+      objectives: [{ id: "objective-1", text: "Improve the target model" }],
+      problems: [{ id: "scope-system", name: "System Model", selected: true }],
+      stage: { value: "experiments" }
+    }
+  };
+  const captured = recordFeedback(state, { title: "Target model", feedback: "Use orientation in the target model.", expectedRevision: 1 });
+  const resumed = projectState.recordFeedbackTasks(captured, {
+    feedbackThreadId: captured.feedbackThreads[0].id,
+    feedback: captured.feedbackThreads[0].feedback,
+    title: captured.feedbackThreads[0].title,
+    context: { title: "Cognitive ISAC", objectives: [], selectedScope: { id: "scope-system", name: "System Model" }, targetLocations: [] },
+    taskGraph: { tasks: [{ id: "task-model", title: "Revise the target model" }] }
+  }, { expectedRevision: 2 });
+  assert.equal(resumed.feedbackThreads.length, 1);
+  assert.equal(resumed.feedbackThreads[0].id, captured.feedbackThreads[0].id);
+  assert.equal(resumed.feedbackThreads[0].tasks[0].id, "task-model");
+  assert.equal(resumed.events.at(-1).type, "feedback.decomposed");
+});
+
 test("links optional manuscript and vault paths after name-only onboarding", () => {
   const state = createProjectState({ project: "ISAC thesis" });
   const updated = updateProjectPaths(state, { thesisDir: "/tmp/thesis", vaultPath: "/tmp/vault", expectedRevision: 1 });

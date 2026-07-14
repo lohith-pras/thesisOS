@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createProjectState } from "../src/core/project-state.mjs";
+import { createEvidenceTrail } from "../src/core/evidence-trail.mjs";
 import { createRevisionResponseMatrix } from "../src/core/revision-response-matrix.mjs";
 
 test("renders a revision response matrix from approvals, selected evidence, and grounded drafts", () => {
@@ -31,4 +32,24 @@ test("renders a revision response matrix from approvals, selected evidence, and 
   assert.match(matrix.markdown, /Supervisor comment \| Proposed task/);
   assert.match(matrix.markdown, /group:123:ABCD/);
   assert.match(matrix.markdown, /does not claim manuscript changes/);
+});
+
+test("projects one canonical evidence trail for workflow, traceback, and matrix consumers", () => {
+  const state = createProjectState({ project: "Evidence thesis" });
+  state.feedbackThreads = [{
+    id: "feedback-1",
+    title: "Scope the claim",
+    feedback: "Keep the claim bounded.",
+    placement: { status: "confirmed", stage: "literature-review", targetLocationIds: [] },
+    tasks: [{ id: "task-1", title: "Review counter-evidence", kind: "literature", approvalStatus: "approved", tool: "zotero" }]
+  }];
+  state.evidence = [{ feedbackThreadId: "feedback-1", taskId: "task-1", sourceId: "group:123:ABCD", title: "Counter-evidence", selectedAt: "2026-07-14T00:00:00.000Z" }];
+
+  const [thread] = createEvidenceTrail(state);
+  const matrix = createRevisionResponseMatrix(state);
+
+  assert.equal(thread.placement.stage, "literature-review");
+  assert.equal(thread.tasks[0].status, "Evidence selected");
+  assert.deepEqual(thread.tasks[0].evidenceLabels, matrix.rows[0].evidence);
+  assert.equal(thread.tasks[0].note, matrix.rows[0].note);
 });

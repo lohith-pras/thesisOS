@@ -5,5 +5,11 @@ dist/
 demo-output/
 .thesisos.json
 .agents/
+!.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/evidence-note-writing/
+!.agents/skills/evidence-note-writing/**
 skills-lock.json
 .thesisos-cache/

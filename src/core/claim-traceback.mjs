@@ -1,5 +1,5 @@
 import { validateProjectState } from "./project-state.mjs";
-import { createRevisionResponseMatrix } from "./revision-response-matrix.mjs";
+import { createFeedbackThreadTrail } from "./evidence-trail.mjs";
 
 function requireText(value, label) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required.`);
@@ -14,10 +14,10 @@ export function createClaimTraceback(state, input) {
   if (!thread) throw new Error(`Unknown feedback thread '${feedbackThreadId}'.`);
   const evidence = state.evidence.find((record) => record.feedbackThreadId === feedbackThreadId && record.sourceId === sourceId);
   if (!evidence) throw new Error(`No selected evidence for source '${sourceId}' in this feedback thread.`);
-  const task = thread.tasks?.find((candidate) => candidate.id === evidence.taskId);
+  const trail = createFeedbackThreadTrail(state, feedbackThreadId);
+  const task = trail.tasks.find((candidate) => candidate.taskId === evidence.taskId);
   if (!task) throw new Error(`The selected evidence references unknown task '${evidence.taskId}'.`);
   const sourceNote = evidence.draft?.sourceNotes?.find((note) => note.sourceId === sourceId) ?? null;
-  const responseMatrix = createRevisionResponseMatrix(state).rows.find((row) => row.feedbackThreadId === feedbackThreadId && row.taskId === task.id) ?? null;
 
   return {
     schemaVersion: 1,
@@ -25,7 +25,7 @@ export function createClaimTraceback(state, input) {
     source: { sourceId, title: evidence.title?.trim() || "Untitled Zotero item", abstract: evidence.abstract ?? null, doi: evidence.doi ?? null, selectedAt: evidence.selectedAt ?? null },
     claim: sourceNote ? { summary: sourceNote.summary, relevance: sourceNote.relevance } : null,
     feedback: { id: thread.id, title: thread.title?.trim() || "Supervisor feedback", comment: thread.feedback },
-    task: { id: task.id, title: task.title, approvalStatus: task.approvalStatus, tool: task.tool ?? null },
-    responseMatrix: responseMatrix ? { status: responseMatrix.status, note: responseMatrix.note } : null
+    task: { id: task.taskId, title: task.task, approvalStatus: task.approvalStatus, tool: task.tool },
+    responseMatrix: { status: task.status, note: task.note }
   };
 }

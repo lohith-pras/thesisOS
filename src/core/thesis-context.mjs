@@ -13,7 +13,10 @@ function selectedScope(profile) {
   return (profile.problems ?? []).find((problem) => problem.selected === true);
 }
 
-function targetLocations(chapters, feedback) {
+function targetLocations(chapters, feedback, placement) {
+  if (placement?.status === "confirmed" && Array.isArray(placement.targetLocationIds)) {
+    return chapters.filter(({ id }) => placement.targetLocationIds.includes(id));
+  }
   const explicit = feedback.match(/\b(?:chapter|section)\s+([0-9]+(?:\.[0-9]+)*)\b/i)?.[1];
   if (explicit) {
     const matches = chapters.filter((location) => location.number === explicit);
@@ -42,13 +45,15 @@ export function buildThesisContext(state, purpose, options = {}) {
   const profile = state.profile;
   const scope = selectedScope(profile);
   const feedback = String(options.feedback ?? "").trim();
-  const locations = boundedLocations(targetLocations(state.manuscript?.chapters ?? [], feedback));
+  const placement = options.placement?.status === "confirmed" ? options.placement : null;
+  const locations = boundedLocations(targetLocations(state.manuscript?.chapters ?? [], feedback, placement));
   const base = {
     title: profile.title?.value ?? null,
     topic: profile.topic?.value ?? null,
     selectedScope: { id: scope.id, name: scope.name, summary: scope.summary ?? "" },
     objectives: (profile.objectives ?? []).map(({ id, text }) => ({ id, text })),
-    stage: profile.stage.value
+    stage: placement?.stage ?? profile.stage.value,
+    ...(placement ? { feedbackPlacement: { stage: placement.stage, targetLocationIds: placement.targetLocationIds } } : {})
   };
   if (purpose === "decomposition") return { ...base, targetLocations: locations, feedback };
   if (purpose === "retrieval") {

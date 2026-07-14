@@ -128,7 +128,7 @@ test("judge mode uses isolated deterministic project state without mutating the 
       const projectResponse = await fetch(`${baseUrl}/api/project`);
       const project = await projectResponse.json();
       assert.equal(projectResponse.status, 200);
-      assert.equal(project.state.project.name, "Workplace EV charging flexibility for distribution-grid congestion management");
+      assert.equal(project.state.project.name, "Workplace EV charging flexibility");
       assert.equal(project.readiness.ready, true);
 
       const decomposition = await fetch(`${baseUrl}/api/workflow/decompose`, {
@@ -861,7 +861,7 @@ test("frontend distinguishes a completed zero-result search and offers query ref
   assert.match(source, /state\.searchArtifact !== null/);
   assert.match(source, /No papers matched/);
   assert.match(source, /literature-search-form/);
-  assert.match(source, /Search again/);
+  assert.match(source, /Search within your Zotero library/);
 });
 
 test("frontend previews and explicitly approves Obsidian note writes", async () => {
@@ -900,7 +900,7 @@ test("frontend exposes Claim Traceback through the canonical workflow API", asyn
 
 test("frontend provides a state-aware guide only for the demo workflow", async () => {
   const source = await readFile(resolve("app/app.js"), "utf8");
-  assert.match(source, /DEMO GUIDE/);
+  assert.match(source, /DEMO STEPS/);
   assert.match(source, /\/api\/demo\/restart/);
   assert.match(source, /demoGuideHidden/);
   assert.match(source, /seed-demo-feedback/);
@@ -928,7 +928,7 @@ test("frontend implements profile onboarding before feedback", async () => {
   assert.match(source, /\/api\/project\/profile\/propose/);
   assert.match(source, /\/api\/project\/profile\/review/);
   assert.match(source, /\/api\/project\/profile\/answers/);
-  assert.match(source, /Profile incomplete/);
+  assert.match(source, /Set up your thesis profile/);
   assert.match(source, /profile-form/);
   assert.match(source, /expectedRevision/);
   assert.match(source, /Optional manuscript folder/);

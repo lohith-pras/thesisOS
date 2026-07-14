@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { TASK_GRAPH_SCHEMA, TASK_DECOMPOSITION_PROMPT } from "./openai.mjs";
 import { validateTaskGraph } from "./schema.mjs";
 import { DRAFT_SCHEMA, validateGroundedDraft } from "./note-drafting.mjs";
+import { EVIDENCE_NOTE_WRITING_INSTRUCTIONS } from "./evidence-note-style.mjs";
 import { ensureLiteratureTask } from "./decompose.mjs";
 
 function runCommand(command, args, cwd) {
@@ -72,18 +73,21 @@ export async function decomposeFeedbackWithCodex(feedback, options = {}) {
   });
 }
 
-export async function draftEvidenceNoteWithCodex({ feedback, evidenceRefs, approvedExternalProcessing }, options = {}) {
+export async function draftEvidenceNoteWithCodex({ feedback, evidenceRefs, approvedExternalProcessing, thesisContext = null }, options = {}) {
   if (approvedExternalProcessing !== true) throw new Error("Explicit approval is required before sending selected evidence to Codex CLI.");
   if (!Array.isArray(evidenceRefs) || !evidenceRefs.length) throw new Error("Selected evidence is required for drafting.");
   const model = options.model ?? process.env.CODEX_MODEL;
   const context = evidenceRefs.map((reference) => ({ sourceId: reference.sourceId, title: reference.title, abstract: reference.abstract, tags: reference.tags, doi: reference.doi }));
   const prompt = [
-    "Draft a concise literature synthesis using only the supplied selected evidence.",
+    "Draft a short decision brief using only the supplied selected evidence.",
+    "Overview: at most two sentences and 60 words. Each source summary: one sentence and at most 32 words. Each relevance note: one sentence and at most 20 words.",
+    "Never expose source IDs in prose; the interface links sources separately.",
     "Never cite or infer a source ID that is not supplied.",
     "Return only JSON matching the provided schema.",
     "Distinguish source summaries from researcher interpretation.",
+    EVIDENCE_NOTE_WRITING_INSTRUCTIONS,
     "",
-    JSON.stringify({ feedback, selectedEvidence: context })
+    JSON.stringify({ feedback, thesisContext, selectedEvidence: context })
   ].join("\n");
   const invoke = options.invokeCodex ?? invokeCodex;
   const generated = await invoke({
