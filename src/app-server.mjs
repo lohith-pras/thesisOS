@@ -14,7 +14,7 @@ import { applyReviewDecisions } from "./core/review.mjs";
 import { selectEvidenceReferences } from "./core/evidence.mjs";
 import { createObsidianNotePreview, writeObsidianNote } from "./core/obsidian.mjs";
 import { createDeterministicDraft, draftEvidenceNoteWithOpenAI } from "./core/note-drafting.mjs";
-import { demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
+import { createDemoProjectState, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
 import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
 import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault } from "./core/obsidian-vault.mjs";
 import { acceptProfileProposal, answerProfileQuestions, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordFeedback, recordFeedbackTasks, recordProjectDocument, reviewCanonicalTask, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
@@ -144,8 +144,16 @@ export function createAppServer(dependencies = {}) {
   const buildPaperMap = dependencies.paperMap ?? paperMap;
   const auditVault = dependencies.auditVault ?? auditObsidianVault;
   const canonicalStatePath = resolve(projectDir, ".thesisos", "thesis-state.json");
-  const stateExists = async () => { try { await access(canonicalStatePath); return true; } catch { return false; } };
-  const loadCanonicalState = async () => loadProjectState(canonicalStatePath);
+  let judgeState = judgeMode ? createDemoProjectState() : null;
+  const stateExists = async () => {
+    if (judgeState) return true;
+    try { await access(canonicalStatePath); return true; } catch { return false; }
+  };
+  const loadCanonicalState = async () => judgeState ?? loadProjectState(canonicalStatePath);
+  const persistCanonicalState = async (state) => {
+    if (judgeMode) { judgeState = state; return state; }
+    return saveProjectState(canonicalStatePath, state);
+  };
   const loadConfiguredVaultRoot = async () => {
     if (await stateExists()) {
       const state = await loadCanonicalState();
@@ -194,14 +202,14 @@ export function createAppServer(dependencies = {}) {
           const scan = await scanThesisCheckout(thesisDir);
           state = updateProjectScan(state, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] });
         }
-        await saveProjectState(canonicalStatePath, state);
+        await persistCanonicalState(state);
         sendJson(response, 201, { state, readiness: profileReadiness(state) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/feedback") {
         const body = await readJsonBody(request);
         const state = recordFeedback(await loadCanonicalState(), body);
-        await saveProjectState(canonicalStatePath, state);
+        await persistCanonicalState(state);
         sendJson(response, 201, { state, readiness: profileReadiness(state), feedbackThread: state.feedbackThreads.at(-1) });
         return;
       }
@@ -214,7 +222,7 @@ export function createAppServer(dependencies = {}) {
           const scan = await scanThesisCheckout(thesisDir);
           state = updateProjectScan(state, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] });
         }
-        await saveProjectState(canonicalStatePath, state);
+        await persistCanonicalState(state);
         sendJson(response, 200, { state, readiness: profileReadiness(state) });
         return;
       }
@@ -224,7 +232,7 @@ export function createAppServer(dependencies = {}) {
         const extracted = await extractDocument(resolve(body.path));
         const id = `document-${extracted.metadata.sha256.slice(0, 12)}`;
         state = recordProjectDocument(state, { id, ...extracted.metadata, localPath: resolve(body.path) }, { expectedRevision: body.expectedRevision });
-        await saveProjectState(canonicalStatePath, state);
+        await persistCanonicalState(state);
         sendJson(response, 200, { state, readiness: profileReadiness(state), document: state.documents.find((item) => item.id === id) });
         return;
       }
@@ -244,7 +252,7 @@ export function createAppServer(dependencies = {}) {
         const extracted = await extractDocument(path);
         const id = `document-${extracted.metadata.sha256.slice(0, 12)}`;
         state = recordProjectDocument(state, { id, ...extracted.metadata, localPath: path }, { expectedRevision: body.expectedRevision });
-        await saveProjectState(canonicalStatePath, state);
+        await persistCanonicalState(state);
         sendJson(response, 200, { state, readiness: profileReadiness(state), document: state.documents.find((item) => item.id === id) });
         return;
       }
@@ -260,21 +268,21 @@ export function createAppServer(dependencies = {}) {
         const proposer = provider === "openai" ? proposeProfileOpenAI : proposeProfile;
         const proposal = await proposer({ document: { id: metadata.id, ...extracted }, approvedExternalProcessing: body.approvedExternalProcessing }, { cwd: state.project.thesisDir ?? projectDir, model: body.model });
         state = createProfileProposal(state, proposal, { provider, model: body.model, expectedRevision: body.expectedRevision });
-        await saveProjectState(canonicalStatePath, state);
+        await persistCanonicalState(state);
         sendJson(response, 200, { state, readiness: profileReadiness(state) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/profile/review") {
         const body = await readJsonBody(request);
         let state = acceptProfileProposal(await loadCanonicalState(), body);
-        await saveProjectState(canonicalStatePath, state);
+        await persistCanonicalState(state);
         sendJson(response, 200, { state, readiness: profileReadiness(state) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/profile/answers") {
         const body = await readJsonBody(request);
         let state = answerProfileQuestions(await loadCanonicalState(), body);
-        await saveProjectState(canonicalStatePath, state);
+        await persistCanonicalState(state);
         sendJson(response, 200, { state, readiness: profileReadiness(state) });
         return;
       }
@@ -325,7 +333,7 @@ export function createAppServer(dependencies = {}) {
         if (await stateExists()) {
           const current = await loadCanonicalState();
           const state = updateProjectPaths(current, { vaultPath: vault.path, expectedRevision: current.revision });
-          await saveProjectState(canonicalStatePath, state);
+          await persistCanonicalState(state);
         }
         sendJson(response, 200, { configured: true, vault });
         return;
@@ -356,14 +364,15 @@ export function createAppServer(dependencies = {}) {
         let runtimeProvider = provider;
         let runtimeWarning;
         let taskGraph;
-        if (provider === "codex") {
+        if (judgeMode) {
+          taskGraph = await decomposeOffline(feedback, context ? { context } : undefined);
+          runtimeProvider = "offline-fallback";
+          runtimeWarning = "Judge mode uses deterministic task decomposition and does not call an external model.";
+        } else if (provider === "codex") {
           try {
             taskGraph = await decomposeCodex(feedback, { model: body.model, cwd: projectDir, ...(context ? { context } : {}) });
           } catch (error) {
-            if (!judgeMode) throw error;
-            taskGraph = await decomposeOffline(feedback, context ? { context } : undefined);
-            runtimeProvider = "offline-fallback";
-            runtimeWarning = `Codex CLI unavailable in judge mode; deterministic fallback used. ${error.message}`;
+            throw error;
           }
         } else taskGraph = provider === "openai"
           ? await decomposeOpenAI(feedback, { model: body.model, ...(context ? { context } : {}) })
@@ -381,7 +390,7 @@ export function createAppServer(dependencies = {}) {
             return { ...task, objectiveIds, targetLocationIds };
           }) };
           const persisted = recordFeedbackTasks(canonical, { feedback, title: body.title, taskGraph, context }, { expectedRevision: body.expectedRevision });
-          await saveProjectState(canonicalStatePath, persisted);
+          await persistCanonicalState(persisted);
           sendJson(response, 200, { taskGraph, state: persisted, context, readiness: profileReadiness(persisted), runtime: { provider: runtimeProvider, model: body.model || (provider === "openai" ? DEFAULT_MODEL : provider === "offline" ? "deterministic-v1" : "codex-default"), validated: true, ...(runtimeWarning ? { warning: runtimeWarning } : {}) } });
           return;
         }
@@ -404,7 +413,7 @@ export function createAppServer(dependencies = {}) {
         if (body.feedbackThreadId && await stateExists()) {
           try {
             const state = reviewCanonicalTask(await loadCanonicalState(), body);
-            await saveProjectState(canonicalStatePath, state);
+            await persistCanonicalState(state);
             const thread = state.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
             sendJson(response, 200, { state, taskGraph: { schemaVersion: 1, feedback: thread.feedback, tasks: thread.tasks, nextAction: "Run approved work" } });
           } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
@@ -463,7 +472,7 @@ export function createAppServer(dependencies = {}) {
         if (body.feedbackThreadId && await stateExists()) {
           try {
             const state = attachCanonicalEvidence(await loadCanonicalState(), body, { searchArtifact: body.searchArtifact });
-            await saveProjectState(canonicalStatePath, state);
+            await persistCanonicalState(state);
             const workflow = canonicalWorkflow(state);
             sendJson(response, 200, { state, workflow, taskGraph: workflow.taskGraph, selection: workflow.evidenceSelection });
           } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
@@ -507,7 +516,7 @@ export function createAppServer(dependencies = {}) {
         if (canonical) {
           try {
             const state = recordCanonicalDraft(canonical, { ...body, draft }, { provider: draft.provider ?? body.provider, model: draft.model ?? body.model });
-            await saveProjectState(canonicalStatePath, state);
+            await persistCanonicalState(state);
             sendJson(response, 200, { ...draft, state, workflow: canonicalWorkflow(state) });
           } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
           return;

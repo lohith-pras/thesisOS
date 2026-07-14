@@ -1,5 +1,6 @@
 import { extractLiteratureQuery, requireApprovedLiteratureTask } from "./zotero.mjs";
 import { rankResearchPapers } from "./retrieval.mjs";
+import { createProjectState } from "./project-state.mjs";
 
 const DEMO_LIBRARY = { type: "fixture", id: "demo", name: "ThesisOS demo library", paperCount: 3 };
 
@@ -59,6 +60,18 @@ export function demoLibraryPayload() {
     paperCount: DEMO_PAPERS.length,
     papers: DEMO_PAPERS
   };
+}
+
+export function createDemoProjectState() {
+  const state = createProjectState({ project: "ThesisOS demo thesis" }, { now: "2026-07-14T00:00:00.000Z" });
+  state.profile = {
+    ...state.profile,
+    title: { value: "Evidence-grounded thesis revision", provenance: { kind: "demo-fixture" } },
+    objectives: [{ id: "objective-demo", text: "Strengthen thesis revisions with reviewed literature evidence", provenance: { kind: "demo-fixture" } }],
+    problems: [{ id: "scope-demo", name: "Evidence-grounded revision", summary: "Connect supervisor feedback to reviewed sources", selected: true, provenance: { kind: "demo-fixture" } }],
+    stage: { value: "revision", provenance: { kind: "demo-fixture" } }
+  };
+  return state;
 }
 
 export async function searchDemoLibrary(taskGraph, options = {}) {

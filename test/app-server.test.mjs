@@ -85,20 +85,59 @@ test("judge mode starts directly with the labelled demo library", async () => {
   });
 });
 
-test("judge mode falls back visibly when Codex CLI is unavailable", async () => {
+test("judge mode uses isolated deterministic project state without mutating the repository project", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-judge-state-test-"));
+  try {
+    const diskState = createProjectState({ project: "Private repository thesis" });
+    const statePath = join(projectDir, ".thesisos", "thesis-state.json");
+    await saveProjectState(statePath, diskState);
+    const before = await readFile(statePath, "utf8");
+
+    await withServer({ judgeMode: true, projectDir }, async (baseUrl) => {
+      const projectResponse = await fetch(`${baseUrl}/api/project`);
+      const project = await projectResponse.json();
+      assert.equal(projectResponse.status, 200);
+      assert.equal(project.state.project.name, "ThesisOS demo thesis");
+      assert.equal(project.readiness.ready, true);
+
+      const decomposition = await fetch(`${baseUrl}/api/workflow/decompose`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedback: "Strengthen the evidence in section 3.2.",
+          provider: "codex",
+          expectedRevision: project.state.revision
+        })
+      });
+      const result = await decomposition.json();
+      assert.equal(decomposition.status, 200);
+      assert.equal(result.runtime.provider, "offline-fallback");
+      assert.equal(result.state.feedbackThreads.length, 1);
+    });
+
+    assert.equal(await readFile(statePath, "utf8"), before);
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test("judge mode labels deterministic decomposition without invoking Codex CLI", async () => {
+  let codexInvoked = false;
   await withServer({
     judgeMode: true,
-    decomposeCodex: async () => { throw new Error("Codex is not installed"); }
+    decomposeCodex: async () => { codexInvoked = true; throw new Error("Codex should not run in judge mode"); }
   }, async (baseUrl) => {
+    const project = await (await fetch(`${baseUrl}/api/project`)).json();
     const response = await fetch(`${baseUrl}/api/workflow/decompose`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ feedback: "Review literature and revise section 3.2.", provider: "codex" })
+      body: JSON.stringify({ feedback: "Review literature and revise section 3.2.", provider: "codex", expectedRevision: project.state.revision })
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.runtime.provider, "offline-fallback");
-    assert.match(payload.runtime.warning, /Codex is not installed/);
+    assert.match(payload.runtime.warning, /does not call an external model/);
+    assert.equal(codexInvoked, false);
     assert.ok(payload.taskGraph.tasks.length > 0);
   });
 });
