@@ -58,7 +58,7 @@ The strongest competitive contrast is:
 The first two sentences of the Devpost description should explicitly establish:
 
 1. Who it is for: thesis students responding to supervisor feedback.
-2. What it does: creates an approval-gated, evidence-backed revision trail.
+2. What it does: turns feedback into reviewed evidence and citation-checked thesis notes.
 3. What is working: Zotero retrieval, evidence selection, grounded drafting, and vault output.
 4. How the required technology was used: built with Codex using GPT-5.6.
 
@@ -66,7 +66,7 @@ Blocking checklist:
 
 - [x] Confirm the qualifying Codex session used GPT-5.6.
 - [x] Include the `/feedback` session ID.
-- [ ] Public repository opens without permission requests.
+- [x] Public repository opens without permission requests.
 - [x] README contains exact setup and demo instructions.
 - [ ] Public YouTube demo is under three minutes and includes audio.
 - [ ] Video explicitly covers both what was built and how Codex with GPT-5.6 was used.
@@ -120,13 +120,13 @@ The video is the primary judging surface because judges may not run the project.
 
 Show the result and conflict immediately:
 
-> A supervisor says, "Strengthen section 3.2." Most AI tools draft immediately. ThesisOS refuses until I approve the task and the evidence.
+> A supervisor says, "Strengthen section 3.2." ThesisOS finds relevant papers in my Zotero library and rejects any draft that cites a source I did not select.
 
 ### Suggested sequence
 
-1. **0:00-0:15 — Hook:** show the refusal state and the final grounded artifact.
-2. **0:15-1:35 — Workflow:** feedback, task approval, Zotero candidates, evidence approval, grounded note.
-3. **1:35-2:05 — Trust proof:** show source IDs, approval history, and vault output.
+1. **0:00-0:15 — Hook:** show the supervisor feedback and final grounded artifact.
+2. **0:15-1:35 — Workflow:** feedback, task approval, Zotero candidates, evidence selection, grounded note.
+3. **1:35-2:05 — Trust proof:** show source IDs, then demonstrate that unapproved work and unknown citations are rejected.
 4. **2:05-2:35 — Build proof:** show the qualifying Codex/GPT-5.6 session ID plus one architecture decision, implementation diff, and test result.
 5. **2:35-2:55 — Why it matters:** research change control, not another text generator.
 6. **2:55-3:00 — Close:** "Evidence before AI writing."

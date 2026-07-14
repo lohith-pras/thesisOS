@@ -6,7 +6,7 @@ ThesisOS
 
 ## Tagline
 
-Turn supervisor feedback into an approval-gated, evidence-backed research trail.
+Turn supervisor feedback into reviewed evidence and citation-checked thesis notes.
 
 ## Category
 
@@ -20,7 +20,7 @@ The submitted feedback receipt is preserved at [`docs/assets/codex-feedback-rece
 
 ## What it does
 
-ThesisOS helps thesis students act on ordinary supervisor feedback without losing the research trail. It decomposes the original comment into reviewable tasks, searches a selected Zotero library semantically across titles, abstracts, tags, authors, venues, and DOI, and asks the researcher to select the papers that truly count as evidence. It can then draft a grounded literature note whose citations are restricted to those selected Zotero source IDs. Every write remains a separate approval.
+A supervisor says, “Section 3.2 needs stronger evidence,” but the relevant papers rarely use the same wording. ThesisOS turns that comment into reviewable tasks, searches the student's selected Zotero library, and asks the researcher which papers truly count as evidence. It then drafts a grounded literature note whose citations must match those selected Zotero source IDs; a draft containing an unknown source ID is rejected. Every write remains a separate approval.
 
 ## How we built it
 
@@ -32,7 +32,7 @@ ThesisOS was designed and implemented with Codex using GPT-5.6. In the primary b
 
 ## How Codex and GPT-5.6 are used
 
-Build-time and runtime use are intentionally separate. Codex with GPT-5.6 built the submitted project and is evidenced by the verified session above. At runtime, Codex CLI is the default for decomposition and grounded drafting; it uses an authenticated local session, ephemeral read-only execution, and strict structured output. GPT-5.6 is also available as an explicitly configured API adapter with `store: false`, but that optional adapter is not the project's hackathon eligibility claim. Every runtime citation must match a researcher-selected stable Zotero source ID, and unavailable models produce a labelled deterministic fallback.
+Codex with GPT-5.6 built the submitted project, as evidenced by the verified session above. At runtime, users can choose Codex CLI, an explicitly configured OpenAI adapter with `store: false`, or a labelled deterministic fallback; every citation must still match a researcher-selected stable Zotero source ID.
 
 ## Challenges
 
@@ -42,7 +42,7 @@ Natural supervisor language rarely matches paper titles, and Zotero libraries ma
 
 - One-command judge mode with no Zotero, Ollama, API key, or filesystem writes.
 - Real 40-paper group-library integration.
-- Recall@5 of 0.83 and mean reciprocal rank of 1.0 on five supervisor-style queries.
+- Recall@5 of 0.83 on a small five-query, hand-labelled regression fixture; this is not presented as a general performance claim.
 - Stable evidence provenance from Zotero through grounded note preview.
 - Explicit refusal paths for rejected tasks, external drafting consent, unknown citations, filesystem writes, and file overwrite.
 

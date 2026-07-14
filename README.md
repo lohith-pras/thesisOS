@@ -1,8 +1,15 @@
 # ThesisOS
 
+Your supervisor says, “Section 3.2 needs stronger evidence.” ThesisOS turns that comment into reviewed papers from your Zotero library and a grounded thesis note whose citations must match sources you selected.
+
+If a generated draft cites a source ID you did not select, ThesisOS rejects it.
+
 ![ThesisOS judge-mode workflow](docs/assets/thesisos-hero.gif)
 
-ThesisOS turns supervisor feedback into an approval-gated, evidence-backed research trail. It connects Codex CLI, Zotero, semantic retrieval, grounded drafting, and Obsidian without letting an agent silently change the thesis workspace.
+```bash
+npm install
+npm run app -- --demo
+```
 
 ## Working vertical slice
 
@@ -20,15 +27,6 @@ supervisor feedback
 The researcher remains the decision-maker: rejected tasks cannot run, only selected source IDs can enter drafting, and filesystem writes are separate approvals.
 
 ThesisOS can also maintain `.thesisos/thesis-state.json` as the canonical record of links between feedback, manuscript citations, selected evidence, model-proposed claims, and researcher approvals. Zotero and the local thesis checkout remain authoritative for their native data; generated Obsidian views are deterministic and regenerable. See the [canonical workspace commands](docs/cli.md#canonical-revision-workspace).
-
-## Paper maps and vault maintenance
-
-ThesisOS now exposes two safe building blocks for the next research workflow:
-
-- `POST /api/papers/card` turns one selected Zotero source into a provenance-aware paper card and hierarchical Paper Map. Metadata and abstracts are marked as grounded; research question, method, data, findings, limitations, and thesis relevance remain `needs-review` until a researcher supplies verified content.
-- `POST /api/obsidian/audit` performs a read-only vault audit. It reports broken wiki links and ThesisOS-managed notes missing source IDs, but never writes, deletes, merges, or moves a note.
-
-These endpoints are deliberately separated from any future full-text extraction agent. The default runtime remains Codex CLI through the authenticated local session; an `OPENAI_API_KEY` is optional and only needed when choosing the explicit OpenAI adapter.
 
 ## Quick start
 
@@ -65,26 +63,22 @@ ThesisOS runs on macOS, Windows, and Linux with Node.js 22+. The optional submis
 
 ## How Codex and GPT-5.6 are used
 
-ThesisOS was designed and implemented with Codex using GPT-5.6. In the primary build session, Codex helped implement and debug the Zotero-to-evidence workflow, semantic retrieval with local fallback and evaluation, grounded drafting with citation validation, deterministic judge mode, and automated verification. That session produced the semantic-retrieval work merged in `85067b1`.
+ThesisOS was built with Codex using GPT-5.6; the verified build and feedback ID is `019f5cc1-08be-7071-a5ea-220a8de0f313` ([feedback receipt](docs/assets/codex-feedback-receipt.png)). At runtime, users can choose Codex CLI, the optional OpenAI adapter, or a labelled deterministic fallback.
 
-Primary build and feedback ID: `019f5cc1-08be-7071-a5ea-220a8de0f313` ([feedback receipt](docs/assets/codex-feedback-receipt.png)).
+Build-time GPT-5.6 usage and runtime model selection are separate. The detailed implementation record and model boundaries are documented in the [submission notes](docs/devpost-submission.md).
 
-Codex CLI is the primary runtime. It decomposes messy feedback and drafts grounded notes through the authenticated local CLI, using strict JSON schemas and read-only ephemeral sessions. It does not require `OPENAI_API_KEY`.
+## Why you can use it on a real thesis
 
-GPT-5.6 remains an optional API adapter for users who explicitly configure `OPENAI_API_KEY`. It receives only supervisor feedback and selected evidence, uses `store: false`, and its output is checked against the selected source IDs. If a model is unavailable, ThesisOS labels the deterministic local fallback instead of hiding the failure.
+- **Search boundary:** ThesisOS reads Zotero metadata but cannot alter the library.
+- **Evidence boundary:** drafting receives only reviewed evidence, and drafts containing unselected source IDs are rejected.
+- **Write boundary:** notes are previewed before a separate filesystem approval; judge mode cannot write at all.
 
-Build-time GPT-5.6 usage and runtime model selection are separate: the hackathon evidence is the verified Codex build session above, not the optional runtime API adapter. Additional details are recorded in the [submission notes](docs/devpost-submission.md).
+## Paper maps and vault maintenance
 
-## Product guardrails
+The core submission stops at the evidence-backed note. Two additional endpoints provide safe building blocks for later workflows:
 
-- Zotero access is read-only.
-- Every task begins pending approval.
-- Search requires an approved literature task.
-- Drafting receives only researcher-selected evidence.
-- Unknown source IDs are rejected.
-- Notes are previewed before writing.
-- ThesisOS-managed notes can be updated; unrelated notes are never overwritten.
-- Judge mode cannot write to the filesystem.
+- `POST /api/papers/card` creates provenance-aware paper cards while leaving unverified research fields marked `needs-review`.
+- `POST /api/obsidian/audit` reports broken wiki links and managed notes missing source IDs without changing the vault.
 
 ## Documentation
 
