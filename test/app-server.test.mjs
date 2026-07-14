@@ -550,12 +550,12 @@ test("frontend promotes attached evidence to a dedicated Codex notes step", asyn
   assert.match(source, /Codex CLI is drafting from the selected evidence/);
   assert.match(source, /global-activity/);
   assert.match(source, /section-activity/);
-  assert.match(source, /activity-dots/);
+  assert.match(source, /activity-marker/);
   assert.match(source, /aria-live="polite"/);
   assert.match(source, /Building the grounded note preview/);
 });
 
-test("frontend gives every async workflow a global activity and recovery contract", async () => {
+test("frontend uses a quiet marker for async activity", async () => {
   const source = await readFile(resolve("app/app.js"), "utf8");
   const styles = await readFile(resolve("app/styles.css"), "utf8");
 
@@ -566,8 +566,23 @@ test("frontend gives every async workflow a global activity and recovery contrac
   assert.match(source, /Opening the Obsidian vault picker/);
   assert.match(source, /Saving your review decision/);
   assert.match(source, /Saving the approved note to Obsidian/);
+  assert.match(source, /activity-marker/);
+  assert.doesNotMatch(source, /activity-dots/);
   assert.match(styles, /prefers-reduced-motion:reduce/);
-  assert.match(styles, /@keyframes activity-dot/);
+  assert.doesNotMatch(styles, /@keyframes activity-dot/);
+  assert.doesNotMatch(styles, /animation:activity-dot/);
+});
+
+test("frontend closes task modals through one reduced-motion-aware helper", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+  const styles = await readFile(resolve("app/styles.css"), "utf8");
+
+  assert.match(source, /function closeTaskModal\(\)/);
+  assert.match(source, /prefers-reduced-motion: reduce/);
+  assert.match(source, /closeTaskModal\(\)/);
+  assert.doesNotMatch(source, /document\.querySelector\("\.modal-backdrop"\)\?\.remove\(\)/);
+  assert.match(styles, /\.modal-backdrop\.is-closing/);
+  assert.match(styles, /\.modal-backdrop\.is-closing \.task-modal/);
 });
 
 test("frontend configures an existing or new Obsidian vault without path pasting", async () => {
