@@ -1,4 +1,5 @@
 import { validateTaskGraph } from "./schema.mjs";
+import { ensureLiteratureTask } from "./decompose.mjs";
 
 const DEFAULT_MODEL = "gpt-5.6";
 const API_URL = "https://api.openai.com/v1/responses";
@@ -13,7 +14,7 @@ const TASK_GRAPH_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "kind", "title", "tool", "status", "dependsOn", "evidence"],
+        required: ["id", "kind", "title", "tool", "status", "dependsOn", "evidence", "objectiveIds", "targetLocationIds"],
         properties: {
           id: { type: "string" },
           kind: { type: "string", enum: ["literature", "notes", "thesis", "experiment"] },
@@ -22,6 +23,8 @@ const TASK_GRAPH_SCHEMA = {
           status: { type: "string", enum: ["ready", "blocked", "in_progress", "completed"] },
           dependsOn: { type: "array", items: { type: "string" } },
           evidence: { type: "array", items: { type: "string" } }
+          ,objectiveIds: { type: "array", items: { type: "string" } }
+          ,targetLocationIds: { type: "array", items: { type: "string" } }
         }
       }
     },
@@ -31,7 +34,7 @@ const TASK_GRAPH_SCHEMA = {
 
 const TASK_DECOMPOSITION_PROMPT = `You decompose supervisor feedback for a thesis into a reviewable task graph.
 Create only tasks directly supported by the feedback. Use these mappings exactly: literature=zotero, notes=obsidian, thesis=overleaf, experiment=vscode.
-Use stable ids: task-literature, task-notes, task-thesis, task-experiment. A task may depend only on tasks that exist in your returned array. Keep evidence concrete and reviewable. Do not invent papers, claims, results, or tool actions.`;
+Use stable ids: task-literature, task-notes, task-thesis, task-experiment. A task may depend only on tasks that exist in your returned array. Keep evidence concrete and reviewable. Return objectiveIds and targetLocationIds from the approved context for every task, using empty arrays when none apply. Do not invent papers, claims, manuscript locations, objectives, results, or tool actions.`;
 
 function getOutputText(response) {
   if (typeof response.output_text === "string" && response.output_text.trim()) return response.output_text;
@@ -54,7 +57,7 @@ export async function decomposeFeedbackWithOpenAI(feedback, options = {}) {
       store: false,
       input: [
         { role: "system", content: TASK_DECOMPOSITION_PROMPT },
-        { role: "user", content: `Supervisor feedback:\n${feedback.trim()}` }
+        { role: "user", content: `${options.context ? `Approved thesis context:\n${JSON.stringify(options.context)}\n\n` : ""}Supervisor feedback:\n${feedback.trim()}` }
       ],
       text: {
         format: {
@@ -82,7 +85,7 @@ export async function decomposeFeedbackWithOpenAI(feedback, options = {}) {
     schemaVersion: 1,
     feedback: feedback.trim(),
     createdAt: new Date().toISOString(),
-    tasks: generated.tasks.map((task) => ({ ...task, approvalStatus: "pending" })),
+    tasks: ensureLiteratureTask(generated.tasks.map((task) => ({ ...task, approvalStatus: "pending" }))),
     nextAction: generated.nextAction
   });
 }

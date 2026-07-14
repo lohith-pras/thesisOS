@@ -18,13 +18,15 @@ async function appServerModule() {
 async function withServer(dependencies, run) {
   const { createAppServer } = await appServerModule();
   assert.equal(typeof createAppServer, "function");
-  const server = createAppServer(dependencies);
+  const temporaryProjectDir = dependencies.projectDir ? null : await mkdtemp(join(tmpdir(), "thesisos-app-server-test-"));
+  const server = createAppServer({ ...dependencies, ...(temporaryProjectDir ? { projectDir: temporaryProjectDir } : {}) });
   await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
   const address = server.address();
   try {
     await run(`http://127.0.0.1:${address.port}`);
   } finally {
     await new Promise((resolveClose, rejectClose) => server.close((error) => error ? rejectClose(error) : resolveClose()));
+    if (temporaryProjectDir) await rm(temporaryProjectDir, { recursive: true, force: true });
   }
 }
 
@@ -108,6 +110,28 @@ test("judge mode blocks filesystem writes", async () => {
   });
 });
 
+test("creates a paper map and returns a read-only vault audit", async () => {
+  let auditedPath;
+  await withServer({
+    auditVault: async (path) => { auditedPath = path; return { mode: "read-only", statistics: { noteCount: 2 }, proposals: [] }; }
+  }, async (baseUrl) => {
+    const paper = await fetch(`${baseUrl}/api/papers/card`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: { sourceId: "group:1:A", title: "Paper A", abstract: "Grounded abstract" } })
+    });
+    const paperPayload = await paper.json();
+    assert.equal(paper.status, 200);
+    assert.equal(paperPayload.map.root.children[0].status, "grounded");
+
+    const audit = await fetch(`${baseUrl}/api/obsidian/audit`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vaultPath: "/tmp/vault" })
+    });
+    assert.equal(audit.status, 200);
+    assert.equal((await audit.json()).mode, "read-only");
+    assert.equal(auditedPath, "/tmp/vault");
+  });
+});
+
 test("returns a selectable library catalog when automatic selection is ambiguous", async () => {
   const selectionError = Object.assign(new Error("Choose a library"), {
     code: "ZOTERO_LIBRARY_SELECTION_REQUIRED",
@@ -162,6 +186,37 @@ test("selects and persists a Zotero library through the frontend API", async () 
   });
 });
 
+test("accepts realistic workflow payloads while retaining a bounded request limit", async () => {
+  await withServer({
+    listPapers: async () => ({
+      provider: "zotero-local",
+      access: "read-only",
+      library: { type: "group", id: "10", name: "Research", paperCount: 0 },
+      libraries: [],
+      paperCount: 0,
+      papers: []
+    }),
+    saveSelection: async () => {}
+  }, async (baseUrl) => {
+    const realisticPayload = JSON.stringify({ library: "x".repeat(32 * 1024) });
+    const accepted = await fetch(`${baseUrl}/api/zotero/select`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: realisticPayload
+    });
+    assert.equal(accepted.status, 200);
+
+    const oversizedPayload = JSON.stringify({ library: "x".repeat(1024 * 1024) });
+    const rejected = await fetch(`${baseUrl}/api/zotero/select`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: oversizedPayload
+    });
+    assert.equal(rejected.status, 413);
+    assert.match((await rejected.json()).message, /too large/i);
+  });
+});
+
 test("decomposes feedback through the selected runtime and returns validated artifacts", async () => {
   let invocation;
   await withServer({
@@ -183,10 +238,9 @@ test("decomposes feedback through the selected runtime and returns validated art
     const payload = await response.json();
 
     assert.equal(response.status, 200);
-    assert.deepEqual(invocation, {
-      feedback: "Compare the cited paper in Section 3.2.",
-      options: { model: "test-model", cwd: process.cwd() }
-    });
+    assert.equal(invocation.feedback, "Compare the cited paper in Section 3.2.");
+    assert.equal(invocation.options.model, "test-model");
+    assert.match(invocation.options.cwd, /thesisos-app-server-test-/);
     assert.equal(payload.runtime.provider, "codex");
     assert.equal(payload.runtime.model, "test-model");
     assert.equal(payload.runtime.validated, true);
@@ -390,7 +444,7 @@ test("writes an Obsidian note only with explicit approval", async () => {
 
       assert.equal(response.status, 201);
       assert.equal(artifact.writeApproved, true);
-      assert.match(artifact.path, /ThesisOS\/Literature\/literature-evidence-isac-thesis\.md$/);
+      assert.match(artifact.path, /ThesisOS\/Evidence\/literature-evidence-isac-thesis\.md$/);
       assert.equal(await readFile(artifact.path, "utf8"), preview.markdown);
     });
   } finally {
@@ -455,6 +509,8 @@ test("frontend submits feedback to the validated workflow API instead of creatin
 
   assert.match(source, /\/api\/workflow\/decompose/);
   assert.match(source, /taskGraph/);
+  assert.match(source, /state\.searchArtifact = null/);
+  assert.match(source, /state\.searchQuery = ""/);
   assert.doesNotMatch(source, /state\.tasks\s*=\s*\[/);
 });
 
@@ -463,6 +519,8 @@ test("frontend sends approval and literature search through workflow APIs", asyn
 
   assert.match(source, /\/api\/workflow\/review/);
   assert.match(source, /\/api\/workflow\/search/);
+  assert.match(source, /Approve & search Zotero/);
+  assert.match(source, /shouldSearchLiterature/);
   assert.doesNotMatch(source, /task\.approvalStatus\s*=\s*"approved"/);
 });
 
@@ -478,7 +536,48 @@ test("frontend records selected papers through the evidence selection API", asyn
 
   assert.match(source, /\/api\/workflow\/evidence\/select/);
   assert.match(source, /selectedSourceIds/);
+  assert.match(source, /candidates\.filter\(\(candidate\) => selectedIds\.has\(candidate\.sourceId\)\)/);
   assert.match(source, /evidenceRefs/);
+});
+
+test("frontend promotes attached evidence to a dedicated Codex notes step", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+
+  assert.match(source, /state\.view = "notes"/);
+  assert.match(source, /Evidence notes \/ next step/);
+  assert.match(source, /Draft with Codex CLI/);
+  assert.match(source, /provider: "codex"/);
+  assert.match(source, /Codex CLI is drafting from the selected evidence/);
+  assert.match(source, /global-activity/);
+  assert.match(source, /section-activity/);
+  assert.match(source, /activity-dots/);
+  assert.match(source, /aria-live="polite"/);
+  assert.match(source, /Building the grounded note preview/);
+});
+
+test("frontend gives every async workflow a global activity and recovery contract", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+  const styles = await readFile(resolve("app/styles.css"), "utf8");
+
+  assert.match(source, /function beginActivity/);
+  assert.match(source, /function completeActivity/);
+  assert.match(source, /function failActivity/);
+  assert.match(source, /Checking Zotero Desktop/);
+  assert.match(source, /Opening the Obsidian vault picker/);
+  assert.match(source, /Saving your review decision/);
+  assert.match(source, /Saving the approved note to Obsidian/);
+  assert.match(styles, /prefers-reduced-motion:reduce/);
+  assert.match(styles, /@keyframes activity-dot/);
+});
+
+test("frontend configures an existing or new Obsidian vault without path pasting", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+
+  assert.match(source, /\/api\/obsidian\/status/);
+  assert.match(source, /\/api\/obsidian\/pick/);
+  assert.match(source, /Choose existing vault/);
+  assert.match(source, /Create new vault/);
+  assert.match(source, /ThesisOS remembers your choice for this project/);
 });
 
 test("full library exposes the next literature action instead of presenting inert cards as selectable", async () => {
@@ -504,7 +603,8 @@ test("frontend previews and explicitly approves Obsidian note writes", async () 
   assert.match(source, /\/api\/workflow\/notes\/preview/);
   assert.match(source, /\/api\/workflow\/notes\/write/);
   assert.match(source, /approved:\s*true/);
-  assert.match(source, /Obsidian vault path/);
+  assert.match(source, /Choose existing vault/);
+  assert.match(source, /OBSIDIAN VAULT CONNECTED/);
 });
 
 test("frontend offers a clearly labelled opt-in demo library", async () => {
@@ -522,4 +622,52 @@ test("website design records the local-first Zotero connection flow", async () =
   assert.match(design, /selection_required/);
   assert.match(design, /Connect Zotero Cloud/);
   assert.match(design, /never asks for.*Zotero password/i);
+});
+
+test("frontend implements profile onboarding before feedback", async () => {
+  const source = await readFile(resolve(process.cwd(), "app", "app.js"), "utf8");
+  assert.match(source, /\/api\/project/);
+  assert.match(source, /\/api\/project\/init/);
+  assert.match(source, /\/api\/project\/documents\/upload/);
+  assert.match(source, /\/api\/project\/profile\/propose/);
+  assert.match(source, /\/api\/project\/profile\/review/);
+  assert.match(source, /\/api\/project\/profile\/answers/);
+  assert.match(source, /Profile incomplete/);
+  assert.match(source, /profile-form/);
+  assert.match(source, /expectedRevision/);
+  assert.match(source, /Optional manuscript folder/);
+  assert.doesNotMatch(source, /name="thesisDir"[^>]*required/);
+});
+
+test("frontend implements the approved guided lifecycle", async () => {
+  const source = await readFile(resolve(process.cwd(), "app", "app.js"), "utf8");
+  assert.match(source, /Set up my thesis/);
+  assert.match(source, /Only the thesis name is required/);
+  assert.match(source, /Skip for now/);
+  assert.match(source, /Add supervisor feedback/);
+  assert.match(source, /Setup · .*configured/);
+  assert.match(source, /aria-expanded/);
+  assert.match(source, /\/api\/project\/feedback/);
+  assert.match(source, /About ThesisOS/);
+  assert.doesNotMatch(source, /\["feedback", "Feedback"\]/);
+  assert.doesNotMatch(source, /Overleaf connected/i);
+});
+
+test("first-run and onboarding screens replace the workspace grid", async () => {
+  const source = await readFile(resolve(process.cwd(), "app", "app.js"), "utf8");
+  assert.match(source, /app\.className = "first-run-root"/);
+  assert.match(source, /app\.className = "app-shell"/);
+});
+
+test("profile documents use a Finder picker and card-local loading states", async () => {
+  const source = await readFile(resolve(process.cwd(), "app", "app.js"), "utf8");
+  assert.match(source, /type="file"/);
+  assert.match(source, /accept="\.pdf,\.md,\.txt/);
+  assert.match(source, /drop-zone/);
+  assert.match(source, /contentBase64/);
+  assert.match(source, /\/api\/project\/documents\/upload/);
+  assert.match(source, /activeProfileForm/);
+  assert.match(source, /profile-card-loading/);
+  assert.doesNotMatch(source, /Project document path/);
+  assert.doesNotMatch(source, /Local document path/);
 });

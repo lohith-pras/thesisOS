@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, isAbsolute, resolve } from "node:path";
 import { validateGroundedDraft } from "./note-drafting.mjs";
 
 function requireText(value, label) {
@@ -31,12 +31,12 @@ export function createObsidianNotePreview({ project, feedback, evidenceRefs, dra
     return `## ${index + 1}. ${paperTitle}\n\n- Authors: ${authors}\n- Year: ${reference.year ?? "Not recorded"}\n- Zotero source ID: \`${sourceId}\`\n- Zotero item key: \`${reference.key ?? "Not recorded"}\`\n- Library: ${reference.library?.name ?? reference.library?.id ?? "Not recorded"}\n- DOI: ${reference.doi ? `[${reference.doi}](https://doi.org/${reference.doi})` : "Not recorded"}\n- Source link: ${primaryLink ? `[Open source](${primaryLink})` : "Not recorded"}\n\n### Researcher review\n\n- Claim:\n- Method:\n- Limitation:\n- Relevance to feedback:\n`;
   }).join("\n");
   const synthesis = draft ? `## Grounded synthesis\n\n${draft.overview}\n\n${draft.sourceNotes.map((note) => `### [${note.sourceId}]\n\n${note.summary}\n\n**Relevance:** ${note.relevance}`).join("\n\n")}\n\n> Draft provider: ${draft.provider}${draft.model && draft.model !== "none" ? ` · ${draft.model}` : ""}. Verify every statement before thesis use.\n\n` : "";
-  const markdown = `---\ntitle: ${yamlString(title)}\nproject: ${yamlString(projectName)}\ncreated: ${yamlString(createdAt)}\nsource_count: ${evidenceRefs.length}\ntags:\n  - thesisos\n  - literature-evidence\n---\n\n# ${title}\n\n## Supervisor feedback\n\n> ${sourceFeedback.replaceAll("\n", "\n> ")}\n\n${synthesis}## Evidence sources\n\n${sources}`;
+  const markdown = `---\ntitle: ${yamlString(title)}\nproject: ${yamlString(projectName)}\ncreated: ${yamlString(createdAt)}\nsource_count: ${evidenceRefs.length}\nmanaged_by: thesisos\ntags:\n  - thesisos\n  - literature-evidence\n---\n\n# ${title}\n\n## Supervisor feedback\n\n> ${sourceFeedback.replaceAll("\n", "\n> ")}\n\n${synthesis}## Evidence sources\n\n${sources}`;
 
   return { schemaVersion: 1, title, filename, createdAt, sourceCount: evidenceRefs.length, markdown, writeApproved: false };
 }
 
-export async function writeObsidianNote(preview, { vaultPath, approved, mkdirImpl = mkdir, writeFileImpl = writeFile } = {}) {
+export async function writeObsidianNote(preview, { vaultPath, approved, mkdirImpl = mkdir, readFileImpl = readFile, writeFileImpl = writeFile } = {}) {
   if (approved !== true) throw new Error("Explicit write approval is required before creating an Obsidian note.");
   const root = requireText(vaultPath, "Obsidian vault path");
   if (!isAbsolute(root)) throw new Error("Obsidian vault path must be absolute.");
@@ -44,14 +44,20 @@ export async function writeObsidianNote(preview, { vaultPath, approved, mkdirImp
   requireText(preview?.markdown, "Note Markdown");
   const markdown = preview.markdown;
   if (filename !== `${slugify(preview.title)}.md`) throw new Error("Note filename does not match the preview title.");
-  const directory = resolve(root, "ThesisOS", "Literature");
+  const directory = basename(root).toLowerCase() === "thesisos" ? resolve(root, "Evidence") : resolve(root, "ThesisOS", "Evidence");
   const path = resolve(directory, filename);
   await mkdirImpl(directory, { recursive: true });
   try {
     await writeFileImpl(path, markdown, { encoding: "utf8", flag: "wx" });
   } catch (error) {
-    if (error.code === "EEXIST") throw new Error(`An Obsidian note already exists at '${path}'. Rename or remove it before retrying.`);
+    if (error.code === "EEXIST") {
+      let existing;
+      try { existing = await readFileImpl(path, "utf8"); } catch { existing = ""; }
+      if (!existing.includes("managed_by: thesisos")) throw new Error(`An unmanaged Obsidian note already exists at '${path}'. Choose a different project name.`);
+      await writeFileImpl(path, markdown, { encoding: "utf8", flag: "w" });
+      return { schemaVersion: 1, adapter: "obsidian-markdown", path, filename, writtenAt: new Date().toISOString(), writeApproved: true, updated: true };
+    }
     throw error;
   }
-  return { schemaVersion: 1, adapter: "obsidian-markdown", path, filename, writtenAt: new Date().toISOString(), writeApproved: true };
+  return { schemaVersion: 1, adapter: "obsidian-markdown", path, filename, writtenAt: new Date().toISOString(), writeApproved: true, updated: false };
 }

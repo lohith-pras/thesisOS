@@ -1,0 +1,48 @@
+<h2>Which workspace structure feels most coherent?</h2>
+<p class="subtitle">All three support optional onboarding. The difference is what the Overview page becomes after setup.</p>
+
+<div class="cards">
+  <div class="card" data-choice="guided-lifecycle" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-nav">ThesisOS &nbsp; Overview · Thesis profile · Tasks · Library · Notes · Connections</div>
+      <div style="padding:16px">
+        <div class="label">CURRENT THESIS STATUS</div>
+        <h3 style="margin:8px 0">Writing · Profile 4/6 complete</h3>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0">
+          <div class="placeholder">12 papers</div><div class="placeholder">3 objectives</div><div class="placeholder">4 tasks</div><div class="placeholder">1 feedback</div>
+        </div>
+        <div class="placeholder" style="margin-bottom:8px">Setup path: Profile ✓ → Zotero ✓ → Manuscript — → Vault ✓</div>
+        <div class="placeholder" style="height:90px">Add supervisor feedback here</div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · Guided lifecycle</h3><p>Overview answers “where am I, what is connected, and what should I do next?” Feedback lives directly below status. Recommended.</p></div>
+  </div>
+
+  <div class="card" data-choice="analytics-dashboard" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-nav">ThesisOS &nbsp; Overview · Profile · Tasks · Sources · Connections</div>
+      <div style="padding:16px">
+        <div class="label">WORKSPACE ANALYTICS</div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin:10px 0">
+          <div class="placeholder" style="height:110px">Progress and evidence chart</div>
+          <div class="placeholder" style="height:110px">Connection health</div>
+        </div>
+        <div class="placeholder">Recent activity and feedback</div>
+      </div>
+    </div>
+    <div class="card-body"><h3>B · Analytics dashboard</h3><p>Statistics and trends dominate. Powerful later, but sparse and potentially misleading for a new thesis with little data.</p></div>
+  </div>
+
+  <div class="card" data-choice="setup-home" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-nav">ThesisOS &nbsp; Home · Work · Sources</div>
+      <div style="padding:16px">
+        <div class="label">FINISH SETTING UP</div>
+        <div class="placeholder" style="height:55px;margin:8px 0">1. Add project document ✓</div>
+        <div class="placeholder" style="height:55px;margin:8px 0">2. Connect Zotero →</div>
+        <div class="placeholder" style="height:55px;margin:8px 0">3. Choose Obsidian vault →</div>
+      </div>
+    </div>
+    <div class="card-body"><h3>C · Setup-first home</h3><p>A persistent checklist is extremely clear during onboarding, but makes the product feel unfinished after setup and gives feedback less prominence.</p></div>
+  </div>
+</div>

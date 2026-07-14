@@ -13,7 +13,7 @@ The first complete website loop is feedback decomposition, validated task review
 
 Zotero remains read-only. Selected papers retain their stable source ID, original item key, library identity, title, creators, year, DOI, and URL. The note may render those bibliographic facts, but claim, method, limitation, and relevance fields remain blank until a researcher reviews the paper.
 
-The Obsidian adapter accepts an absolute local vault path only after preview. A write request must include explicit approval, creates files under `ThesisOS/Literature`, and uses create-only filesystem semantics so an existing note is never overwritten.
+The Obsidian adapter accepts an absolute local vault path only after preview. A write request must include explicit approval, writes into a predictable `Evidence/` directory, updates only notes marked `managed_by: thesisos`, and refuses to overwrite unrelated notes.
 
 For reviewers without Zotero, the website may expose an opt-in fixture library. Every fixture response, connection state, and source ID is visibly labelled demo data. There is no automatic fallback from a failed Zotero connection.
 

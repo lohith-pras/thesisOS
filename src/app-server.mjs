@@ -1,10 +1,12 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { dirname, extname, resolve } from "node:path";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { listZoteroPapers, searchZotero } from "./core/zotero.mjs";
 import { decomposeFeedback } from "./core/decompose.mjs";
 import { decomposeFeedbackWithCodex } from "./core/codex.mjs";
+import { draftEvidenceNoteWithCodex } from "./core/codex.mjs";
 import { DEFAULT_MODEL, decomposeFeedbackWithOpenAI } from "./core/openai.mjs";
 import { createThesisState } from "./core/state.mjs";
 import { validateArtifacts } from "./core/schema.mjs";
@@ -14,10 +16,21 @@ import { createObsidianNotePreview, writeObsidianNote } from "./core/obsidian.mj
 import { createDeterministicDraft, draftEvidenceNoteWithOpenAI } from "./core/note-drafting.mjs";
 import { demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
 import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
+import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault } from "./core/obsidian-vault.mjs";
+import { acceptProfileProposal, answerProfileQuestions, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordFeedback, recordFeedbackTasks, recordProjectDocument, reviewCanonicalTask, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
+import { scanThesisCheckout } from "./core/thesis-scan.mjs";
+import { extractProjectDocument } from "./core/project-document.mjs";
+import { proposeProfileWithCodex, proposeProfileWithOpenAI } from "./core/profile-extraction.mjs";
+import { buildThesisContext } from "./core/thesis-context.mjs";
+import { mapBibliographyToSources } from "./core/citation-mapping.mjs";
+import { createPaperCard, paperMap } from "./core/paper-map.mjs";
+import { auditObsidianVault } from "./core/vault-audit.mjs";
 
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_DIR = resolve(SOURCE_DIR, "..");
 const APP_DIR = resolve(WORKSPACE_DIR, "app");
+const MAX_REQUEST_BODY_SIZE = 1 * 1024 * 1024;
+const MAX_DOCUMENT_UPLOAD_BODY_SIZE = 28 * 1024 * 1024;
 const CONTENT_TYPES = new Map([
   [".html", "text/html; charset=utf-8"],
   [".js", "text/javascript; charset=utf-8"],
@@ -64,12 +77,12 @@ function connectionError(error) {
   };
 }
 
-async function readJsonBody(request) {
+async function readJsonBody(request, maxSize = MAX_REQUEST_BODY_SIZE) {
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 16_384) throw httpError(413, "Request body is too large.");
+    if (size > maxSize) throw httpError(413, "Request body is too large.");
     chunks.push(chunk);
   }
   try {
@@ -119,12 +132,122 @@ export function createAppServer(dependencies = {}) {
   const loadDemoLibrary = dependencies.loadDemoLibrary ?? demoLibraryPayload;
   const searchDemo = dependencies.searchDemo ?? searchDemoLibrary;
   const draftOpenAI = dependencies.draftOpenAI ?? draftEvidenceNoteWithOpenAI;
+  const draftCodex = dependencies.draftCodex ?? draftEvidenceNoteWithCodex;
   const draftFallback = dependencies.draftFallback ?? createDeterministicDraft;
   const judgeMode = dependencies.judgeMode === true;
+  const extractDocument = dependencies.extractDocument ?? extractProjectDocument;
+  const proposeProfile = dependencies.proposeProfile ?? proposeProfileWithCodex;
+  const proposeProfileOpenAI = dependencies.proposeProfileOpenAI ?? proposeProfileWithOpenAI;
+  const createCard = dependencies.createPaperCard ?? createPaperCard;
+  const buildPaperMap = dependencies.paperMap ?? paperMap;
+  const auditVault = dependencies.auditVault ?? auditObsidianVault;
+  const canonicalStatePath = resolve(projectDir, ".thesisos", "thesis-state.json");
+  const stateExists = async () => { try { await access(canonicalStatePath); return true; } catch { return false; } };
+  const loadCanonicalState = async () => loadProjectState(canonicalStatePath);
 
   return createServer(async (request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
     try {
+      if (request.method === "GET" && url.pathname === "/api/project") {
+        if (!await stateExists()) { sendJson(response, 200, { initialized: false }); return; }
+        const state = await loadCanonicalState();
+        sendJson(response, 200, { initialized: true, state, readiness: profileReadiness(state) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/init") {
+        const body = await readJsonBody(request);
+        if (!body.project?.trim()) throw httpError(400, "Project name is required.");
+        const thesisDir = typeof body.thesisDir === "string" && body.thesisDir.trim() ? resolve(body.thesisDir) : null;
+        const vaultPath = typeof body.vaultPath === "string" && body.vaultPath.trim() ? resolve(body.vaultPath) : null;
+        let state = createProjectState({ project: body.project, thesisDir, vaultPath });
+        if (thesisDir) {
+          const scan = await scanThesisCheckout(thesisDir);
+          state = updateProjectScan(state, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] });
+        }
+        await saveProjectState(canonicalStatePath, state);
+        sendJson(response, 201, { state, readiness: profileReadiness(state) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/feedback") {
+        const body = await readJsonBody(request);
+        const state = recordFeedback(await loadCanonicalState(), body);
+        await saveProjectState(canonicalStatePath, state);
+        sendJson(response, 201, { state, readiness: profileReadiness(state), feedbackThread: state.feedbackThreads.at(-1) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/paths") {
+        const body = await readJsonBody(request);
+        const thesisDir = typeof body.thesisDir === "string" && body.thesisDir.trim() ? resolve(body.thesisDir) : body.thesisDir === null ? null : undefined;
+        const vaultPath = typeof body.vaultPath === "string" && body.vaultPath.trim() ? resolve(body.vaultPath) : body.vaultPath === null ? null : undefined;
+        let state = updateProjectPaths(await loadCanonicalState(), { thesisDir, vaultPath, expectedRevision: body.expectedRevision });
+        if (thesisDir) {
+          const scan = await scanThesisCheckout(thesisDir);
+          state = updateProjectScan(state, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] });
+        }
+        await saveProjectState(canonicalStatePath, state);
+        sendJson(response, 200, { state, readiness: profileReadiness(state) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/documents/import") {
+        const body = await readJsonBody(request);
+        let state = await loadCanonicalState();
+        const extracted = await extractDocument(resolve(body.path));
+        const id = `document-${extracted.metadata.sha256.slice(0, 12)}`;
+        state = recordProjectDocument(state, { id, ...extracted.metadata, localPath: resolve(body.path) }, { expectedRevision: body.expectedRevision });
+        await saveProjectState(canonicalStatePath, state);
+        sendJson(response, 200, { state, readiness: profileReadiness(state), document: state.documents.find((item) => item.id === id) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/documents/upload") {
+        const body = await readJsonBody(request, MAX_DOCUMENT_UPLOAD_BODY_SIZE);
+        if (typeof body.filename !== "string" || !body.filename.trim()) throw httpError(400, "Document filename is required.");
+        if (typeof body.contentBase64 !== "string" || !body.contentBase64) throw httpError(400, "Document content is required.");
+        const filename = basename(body.filename.trim());
+        if (!new Set([".pdf", ".md", ".txt"]).has(extname(filename).toLowerCase())) throw httpError(400, "Use a PDF, Markdown, or plain-text project document.");
+        const data = Buffer.from(body.contentBase64, "base64");
+        if (!data.length || data.length > 20 * 1024 * 1024) throw httpError(data.length ? 413 : 400, data.length ? "The project document is larger than 20 MB." : "Document content is empty.");
+        const uploadDir = resolve(projectDir, ".thesisos", "uploads", randomUUID());
+        await mkdir(uploadDir, { recursive: true });
+        const path = resolve(uploadDir, filename);
+        await writeFile(path, data, { flag: "wx" });
+        let state = await loadCanonicalState();
+        const extracted = await extractDocument(path);
+        const id = `document-${extracted.metadata.sha256.slice(0, 12)}`;
+        state = recordProjectDocument(state, { id, ...extracted.metadata, localPath: path }, { expectedRevision: body.expectedRevision });
+        await saveProjectState(canonicalStatePath, state);
+        sendJson(response, 200, { state, readiness: profileReadiness(state), document: state.documents.find((item) => item.id === id) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/profile/propose") {
+        const body = await readJsonBody(request);
+        let state = await loadCanonicalState();
+        if (body.expectedRevision !== state.revision) throw Object.assign(new Error(`STATE_STALE: expected revision ${body.expectedRevision}, current revision is ${state.revision}.`), { code: "STATE_STALE" });
+        const metadata = state.documents.find(({ id }) => id === body.documentId);
+        if (!metadata) throw httpError(404, "Project document was not found.");
+        const extracted = await extractDocument(metadata.localPath);
+        const provider = body.provider ?? "codex";
+        if (!new Set(["codex", "openai"]).has(provider)) throw httpError(400, "Profile provider must be 'codex' or 'openai'.");
+        const proposer = provider === "openai" ? proposeProfileOpenAI : proposeProfile;
+        const proposal = await proposer({ document: { id: metadata.id, ...extracted }, approvedExternalProcessing: body.approvedExternalProcessing }, { cwd: state.project.thesisDir ?? projectDir, model: body.model });
+        state = createProfileProposal(state, proposal, { provider, model: body.model, expectedRevision: body.expectedRevision });
+        await saveProjectState(canonicalStatePath, state);
+        sendJson(response, 200, { state, readiness: profileReadiness(state) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/profile/review") {
+        const body = await readJsonBody(request);
+        let state = acceptProfileProposal(await loadCanonicalState(), body);
+        await saveProjectState(canonicalStatePath, state);
+        sendJson(response, 200, { state, readiness: profileReadiness(state) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/profile/answers") {
+        const body = await readJsonBody(request);
+        let state = answerProfileQuestions(await loadCanonicalState(), body);
+        await saveProjectState(canonicalStatePath, state);
+        sendJson(response, 200, { state, readiness: profileReadiness(state) });
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/zotero/status") {
         if (judgeMode) {
           sendJson(response, 200, loadDemoLibrary());
@@ -137,6 +260,39 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "GET" && url.pathname === "/api/demo/library") {
         sendJson(response, 200, loadDemoLibrary());
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/obsidian/status") {
+        const vaultPath = await loadObsidianVault(projectDir);
+        sendJson(response, 200, { configured: Boolean(vaultPath), ...(vaultPath ? { vault: await inspectObsidianVault(vaultPath) } : {}) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/papers/card") {
+        const body = await readJsonBody(request);
+        try {
+          const card = createCard(body.source);
+          sendJson(response, 200, { card, map: buildPaperMap(card) });
+        } catch (error) {
+          throw httpError(400, error.message);
+        }
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/obsidian/audit") {
+        const body = await readJsonBody(request);
+        if (typeof body.vaultPath !== "string" || !body.vaultPath.trim()) throw httpError(400, "An Obsidian vault path is required.");
+        if (judgeMode) throw httpError(403, "Judge mode cannot inspect a local vault.");
+        try {
+          sendJson(response, 200, await auditVault(resolve(body.vaultPath)));
+        } catch (error) {
+          throw httpError(400, error.message);
+        }
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/obsidian/pick") {
+        const body = await readJsonBody(request);
+        if (!new Set(["existing", "create"]).has(body.mode)) throw httpError(400, "Vault mode must be 'existing' or 'create'.");
+        const vault = await chooseObsidianVault(projectDir, { mode: body.mode, name: body.name });
+        sendJson(response, 200, { configured: true, vault });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/zotero/select") {
@@ -160,21 +316,38 @@ export function createAppServer(dependencies = {}) {
           throw httpError(400, "Decomposition provider must be 'offline', 'codex', or 'openai'.");
         }
 
+        const canonical = await stateExists() ? await loadCanonicalState() : null;
+        const context = canonical ? buildThesisContext(canonical, "decomposition", { feedback }) : null;
         let runtimeProvider = provider;
         let runtimeWarning;
         let taskGraph;
         if (provider === "codex") {
           try {
-            taskGraph = await decomposeCodex(feedback, { model: body.model, cwd: projectDir });
+            taskGraph = await decomposeCodex(feedback, { model: body.model, cwd: projectDir, ...(context ? { context } : {}) });
           } catch (error) {
             if (!judgeMode) throw error;
-            taskGraph = await decomposeOffline(feedback);
+            taskGraph = await decomposeOffline(feedback, context ? { context } : undefined);
             runtimeProvider = "offline-fallback";
             runtimeWarning = `Codex CLI unavailable in judge mode; deterministic fallback used. ${error.message}`;
           }
         } else taskGraph = provider === "openai"
-          ? await decomposeOpenAI(feedback, { model: body.model })
-          : await decomposeOffline(feedback);
+          ? await decomposeOpenAI(feedback, { model: body.model, ...(context ? { context } : {}) })
+          : await decomposeOffline(feedback, context ? { context } : undefined);
+        if (canonical) {
+          const knownObjectives = new Set(canonical.profile.objectives.map(({ id }) => id));
+          const knownLocations = new Set((canonical.manuscript.chapters ?? []).map(({ id }) => id));
+          taskGraph = { ...taskGraph, tasks: taskGraph.tasks.map((task) => {
+            const objectiveIds = task.objectiveIds ?? context.objectives.map(({ id }) => id);
+            const targetLocationIds = task.targetLocationIds ?? context.targetLocations.map(({ id }) => id);
+            for (const id of objectiveIds) if (!knownObjectives.has(id)) throw httpError(422, `Task '${task.id}' references unknown objective '${id}'.`);
+            for (const id of targetLocationIds) if (!knownLocations.has(id)) throw httpError(422, `Task '${task.id}' references unknown manuscript location '${id}'.`);
+            return { ...task, objectiveIds, targetLocationIds };
+          }) };
+          const persisted = recordFeedbackTasks(canonical, { feedback, title: body.title, taskGraph, context }, { expectedRevision: body.expectedRevision });
+          await saveProjectState(canonicalStatePath, persisted);
+          sendJson(response, 200, { taskGraph, state: persisted, context, readiness: profileReadiness(persisted), runtime: { provider: runtimeProvider, model: body.model || (provider === "openai" ? DEFAULT_MODEL : provider === "offline" ? "deterministic-v1" : "codex-default"), validated: true, ...(runtimeWarning ? { warning: runtimeWarning } : {}) } });
+          return;
+        }
         const state = createThesisState({ project, feedback, taskGraph });
         validateArtifacts(taskGraph, state);
         sendJson(response, 200, {
@@ -191,6 +364,15 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/workflow/review") {
         const body = await readJsonBody(request);
+        if (body.feedbackThreadId && await stateExists()) {
+          try {
+            const state = reviewCanonicalTask(await loadCanonicalState(), body);
+            await saveProjectState(canonicalStatePath, state);
+            const thread = state.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
+            sendJson(response, 200, { state, taskGraph: { schemaVersion: 1, feedback: thread.feedback, tasks: thread.tasks, nextAction: "Run approved work" } });
+          } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
+          return;
+        }
         if (typeof body.taskId !== "string" || !body.taskId.trim()) throw httpError(400, "A task ID is required.");
         if (!new Set(["approved", "rejected"]).has(body.decision)) throw httpError(400, "Decision must be 'approved' or 'rejected'.");
         try {
@@ -203,6 +385,20 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/workflow/search") {
         const body = await readJsonBody(request);
+        if (body.feedbackThreadId && await stateExists()) {
+          const state = await loadCanonicalState();
+          const thread = state.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
+          if (!thread) throw httpError(404, "Feedback thread was not found.");
+          const context = buildThesisContext(state, "retrieval", { feedback: thread.feedback });
+          const taskGraph = { schemaVersion: 1, feedback: thread.feedback, tasks: thread.tasks, nextAction: "Search approved evidence" };
+          const query = typeof body.query === "string" && body.query.trim() ? body.query.trim() : context.query;
+          if (body.mode === "demo") sendJson(response, 200, await searchDemo(taskGraph, { query }));
+          else {
+            const savedLibrary = await loadSelection(projectDir);
+            sendJson(response, 200, await searchPapers(taskGraph, { ...(savedLibrary ? { savedLibrary } : {}), query, cachePath: resolve(projectDir, ".thesisos-cache", "zotero-embeddings.json") }));
+          }
+          return;
+        }
         if (body.mode === "demo") {
           try {
             sendJson(response, 200, await searchDemo(body.taskGraph, { query: body.query }));
@@ -245,15 +441,17 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/workflow/notes/draft") {
         const body = await readJsonBody(request);
-        if (body.approvedExternalProcessing !== true) throw httpError(400, "Explicit approval is required before sending selected evidence to GPT-5.6.");
+        if (body.approvedExternalProcessing !== true) throw httpError(400, "Explicit approval is required before sending selected evidence to the drafting provider.");
         if (judgeMode) {
           sendJson(response, 200, draftFallback(body.feedback, body.evidenceRefs, "Judge mode uses the deterministic grounded template and does not call an external drafting API."));
           return;
         }
         try {
-          sendJson(response, 200, await draftOpenAI(body, { model: body.model }));
+          if (body.provider === "codex") sendJson(response, 200, await draftCodex(body, { model: body.model, cwd: projectDir }));
+          else sendJson(response, 200, await draftOpenAI(body, { model: body.model }));
         } catch (error) {
-          sendJson(response, 200, draftFallback(body.feedback, body.evidenceRefs, `GPT-5.6 drafting unavailable; deterministic template used. ${error.message}`));
+          const providerLabel = body.provider === "codex" ? "Codex CLI drafting unavailable" : "GPT-5.6 drafting unavailable";
+          sendJson(response, 200, draftFallback(body.feedback, body.evidenceRefs, `${providerLabel}; deterministic template used. ${error.message}`));
         }
         return;
       }
@@ -278,6 +476,14 @@ export function createAppServer(dependencies = {}) {
       }
       await serveApp(url.pathname, response);
     } catch (error) {
+      if (error.code === "PROFILE_INCOMPLETE" || error.code === "STATE_STALE") {
+        sendJson(response, 409, { status: "conflict", code: error.code, message: error.message, ...(error.missing ? { missing: error.missing } : {}) });
+        return;
+      }
+      if (error.code?.startsWith("DOCUMENT_")) {
+        sendJson(response, 422, { status: "invalid_document", code: error.code, message: error.message });
+        return;
+      }
       if (error.statusCode) {
         sendJson(response, error.statusCode, { status: "invalid_request", message: error.message });
         return;

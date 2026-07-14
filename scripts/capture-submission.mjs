@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
+// Development helper for macOS; override the Chrome binary with CHROME_PATH if needed.
 const ROOT = resolve(import.meta.dirname, "..");
 const ASSETS = resolve(ROOT, "docs", "assets");
 const PORT = 4191;

@@ -4,10 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TASK_GRAPH_SCHEMA, TASK_DECOMPOSITION_PROMPT } from "./openai.mjs";
 import { validateTaskGraph } from "./schema.mjs";
+import { DRAFT_SCHEMA, validateGroundedDraft } from "./note-drafting.mjs";
+import { ensureLiteratureTask } from "./decompose.mjs";
 
 function runCommand(command, args, cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    // npm exposes CLIs as .cmd shims on Windows, which require a shell to launch.
+    const child = spawn(command, args, { cwd, shell: process.platform === "win32", stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
@@ -20,7 +23,7 @@ function runCommand(command, args, cwd) {
   });
 }
 
-async function invokeCodex({ prompt, schema, model, cwd, command = "codex" }) {
+export async function invokeCodex({ prompt, schema, model, cwd, command = "codex" }) {
   const temporaryDir = await mkdtemp(join(tmpdir(), "thesisos-codex-"));
   const schemaPath = join(temporaryDir, "task-graph.schema.json");
   const outputPath = join(temporaryDir, "task-graph.json");
@@ -49,7 +52,8 @@ async function invokeCodex({ prompt, schema, model, cwd, command = "codex" }) {
 export async function decomposeFeedbackWithCodex(feedback, options = {}) {
   const text = feedback.trim();
   if (!text) throw new Error("Supervisor feedback cannot be empty.");
-  const prompt = `${TASK_DECOMPOSITION_PROMPT}\n\nSupervisor feedback:\n${text}`;
+  const context = options.context ? `\n\nApproved thesis context:\n${JSON.stringify(options.context)}` : "";
+  const prompt = `${TASK_DECOMPOSITION_PROMPT}${context}\n\nSupervisor feedback:\n${text}`;
   const invoke = options.invokeCodex ?? invokeCodex;
   const generated = await invoke({
     prompt,
@@ -63,7 +67,31 @@ export async function decomposeFeedbackWithCodex(feedback, options = {}) {
     schemaVersion: 1,
     feedback: text,
     createdAt: new Date().toISOString(),
-    tasks: generated.tasks.map((task) => ({ ...task, approvalStatus: "pending" })),
+    tasks: ensureLiteratureTask(generated.tasks.map((task) => ({ ...task, approvalStatus: "pending" }))),
     nextAction: generated.nextAction
   });
+}
+
+export async function draftEvidenceNoteWithCodex({ feedback, evidenceRefs, approvedExternalProcessing }, options = {}) {
+  if (approvedExternalProcessing !== true) throw new Error("Explicit approval is required before sending selected evidence to Codex CLI.");
+  if (!Array.isArray(evidenceRefs) || !evidenceRefs.length) throw new Error("Selected evidence is required for drafting.");
+  const model = options.model ?? process.env.CODEX_MODEL;
+  const context = evidenceRefs.map((reference) => ({ sourceId: reference.sourceId, title: reference.title, abstract: reference.abstract, tags: reference.tags, doi: reference.doi }));
+  const prompt = [
+    "Draft a concise literature synthesis using only the supplied selected evidence.",
+    "Never cite or infer a source ID that is not supplied.",
+    "Return only JSON matching the provided schema.",
+    "Distinguish source summaries from researcher interpretation.",
+    "",
+    JSON.stringify({ feedback, selectedEvidence: context })
+  ].join("\n");
+  const invoke = options.invokeCodex ?? invokeCodex;
+  const generated = await invoke({
+    prompt,
+    schema: DRAFT_SCHEMA,
+    model,
+    cwd: options.cwd ?? process.cwd(),
+    command: options.command
+  });
+  return { schemaVersion: 1, provider: "codex", model: model ?? "codex-default", ...validateGroundedDraft(generated, evidenceRefs) };
 }
