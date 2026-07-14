@@ -16,9 +16,9 @@ Open `http://127.0.0.1:4173`.
 4. **Evidence boundary (1:20–1:45):** Select one or two reviewed papers and attach them. Explain that only selected stable source IDs can enter drafting.
 5. **Grounded drafting (1:45–2:05):** Draft the note and show its source-ID citations and provider label.
 6. **Trust payoff (2:05–2:20):** Show that an unapproved task cannot search and an unknown citation invalidates a draft. Judge mode also stops before filesystem writing.
-7. **GPT-5.6 build proof (2:20–2:45):** Show the primary Codex task, feedback receipt, one implementation diff, and the passing test result. State that Codex with GPT-5.6 built the submitted project; the optional runtime API adapter is separate.
-8. **Why it matters (2:45–2:55):** Name the category: research change control, not another text generator.
-9. **Close (2:55–3:00):** “ThesisOS: evidence before AI writing.”
+7. **Revision response matrix (2:20–2:30):** Return to Overview and download the matrix. Show comment → task → selected Zotero source IDs → grounded-note status, then say it never claims a manuscript change ThesisOS cannot verify.
+8. **GPT-5.6 build proof (2:30–2:50):** Show the primary Codex task, feedback receipt, one implementation diff, and the passing test result. State that Codex with GPT-5.6 built the submitted project; the optional runtime API adapter is separate.
+9. **Close (2:50–3:00):** “ChatGPT gives you text. ThesisOS gives you proof: every comment traceable, every citation from a paper you approved.”
 
 ## Required capture checklist
 
@@ -26,6 +26,7 @@ Open `http://127.0.0.1:4173`.
 - [x] Screenshot: task graph from messy supervisor feedback (`docs/assets/judge-task-approval.png`).
 - [x] Screenshot: judge retrieval results with abstract coverage, threshold, fallback mode, and match provenance (`docs/assets/judge-retrieval.png`).
 - [x] Screenshot: grounded note with stable source-ID citations (`docs/assets/judge-grounded-note.png`).
+- [ ] Screenshot/video moment: Revision Response Matrix downloaded from the canonical workflow.
 - [ ] Screenshot/video moment: rejected task cannot search (include during the narrated recording).
 - [x] GPT-5.6 build feedback receipt preserved (`docs/assets/codex-feedback-receipt.png`).
 - [ ] Upload `docs/assets/thesisos-demo.mp4` as a public YouTube video under three minutes.

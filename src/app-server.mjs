@@ -26,6 +26,7 @@ import { mapBibliographyToSources } from "./core/citation-mapping.mjs";
 import { createPaperCard, paperMap } from "./core/paper-map.mjs";
 import { auditObsidianVault } from "./core/vault-audit.mjs";
 import { attachCanonicalEvidence, recordCanonicalDraft, workflowReadModel } from "./core/workflow.mjs";
+import { createRevisionResponseMatrix } from "./core/revision-response-matrix.mjs";
 
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_DIR = resolve(SOURCE_DIR, "..");
@@ -190,6 +191,11 @@ export function createAppServer(dependencies = {}) {
         if (!await stateExists()) { sendJson(response, 200, { initialized: false }); return; }
         const state = await loadCanonicalState();
         sendJson(response, 200, { initialized: true, state, readiness: profileReadiness(state), workflow: canonicalWorkflow(state) });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/revision-response-matrix") {
+        if (!await stateExists()) throw httpError(409, "Create a thesis workspace before exporting a revision response matrix.");
+        sendJson(response, 200, createRevisionResponseMatrix(await loadCanonicalState()));
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/init") {

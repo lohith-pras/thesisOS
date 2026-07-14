@@ -20,7 +20,7 @@ The submitted feedback receipt is preserved at [`docs/assets/codex-feedback-rece
 
 ## What it does
 
-A supervisor says, “Section 3.2 needs stronger evidence,” but the relevant papers rarely use the same wording. ThesisOS turns that comment into reviewable tasks, searches the student's selected Zotero library, and asks the researcher which papers truly count as evidence. It then drafts a grounded literature note whose citations must match those selected Zotero source IDs; a draft containing an unknown source ID is rejected. Every write remains a separate approval.
+A supervisor says, “Section 3.2 needs stronger evidence,” but the relevant papers rarely use the same wording. ThesisOS turns that comment into reviewable tasks, searches the student's selected Zotero library, and asks the researcher which papers truly count as evidence. It then drafts a grounded literature note whose citations must match those selected Zotero source IDs; a draft containing an unknown source ID is rejected. Finally, it exports a Revision Response Matrix a supervisor can read: comment, task, researcher decision, selected sources, and grounded-note status. Every write remains a separate approval.
 
 ## How we built it
 

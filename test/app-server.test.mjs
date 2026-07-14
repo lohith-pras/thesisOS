@@ -85,6 +85,19 @@ test("judge mode starts directly with the labelled demo library", async () => {
   });
 });
 
+test("exports a read-only revision response matrix from canonical state", async () => {
+  await withServer({ judgeMode: true }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/revision-response-matrix`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.schemaVersion, 1);
+    assert.deepEqual(payload.rows, []);
+    assert.match(payload.markdown, /Revision Response Matrix/);
+    assert.match(payload.markdown, /No feedback has been captured yet/);
+  });
+});
+
 test("judge mode uses isolated deterministic project state without mutating the repository project", async () => {
   const projectDir = await mkdtemp(join(tmpdir(), "thesisos-judge-state-test-"));
   try {
@@ -847,6 +860,14 @@ test("frontend offers a clearly labelled opt-in demo library", async () => {
   assert.match(source, /\/api\/demo\/library/);
   assert.match(source, /Use demo library/);
   assert.match(source, /Demo data/);
+});
+
+test("frontend downloads the revision response matrix from the canonical API", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+
+  assert.match(source, /\/api\/revision-response-matrix/);
+  assert.match(source, /thesisos-revision-response-matrix\.md/);
+  assert.match(source, /REVISION RESPONSE MATRIX/);
 });
 
 test("website design records the local-first Zotero connection flow", async () => {

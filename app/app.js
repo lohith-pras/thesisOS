@@ -144,10 +144,16 @@ function shell(content) {
     <div class="sidebar-rule"></div>
     <div class="sidebar-block"><span class="label">CURRENT PROJECT</span><strong>${esc(state.project)}</strong><span class="project-status"><i></i> Stored on this machine</span></div>
     <div class="sidebar-bottom"><button class="nav-item ${state.view === "settings" ? "active" : ""}" data-view="settings"><span class="nav-glyph">${icon("settings")}</span>Settings</button><button class="nav-item ${state.view === "about" ? "active" : ""}" data-view="about"><span class="nav-glyph">${icon("about")}</span>About ThesisOS</button></div>
-  </aside><main class="main-content"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span><b>/</b><strong>${esc(pageTitle())}</strong></div><div class="topbar-actions"><button class="connection connection-button ${connected ? "connected" : state.connection.status}" data-view="integrations"><i></i>${esc(connectionLabel())}</button></div></header>${activityStrip()}<div class="page-content">${content}</div></main>`;
+  </aside><main class="main-content"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span><b>/</b><strong>${esc(pageTitle())}</strong></div><div class="topbar-actions"><button class="connection connection-button ${connected ? "connected" : state.connection.status}" data-view="integrations"><i></i>${esc(connectionLabel())}</button></div></header>${activityStrip()}<div class="page-content">${content}${state.view === "overview" ? responseMatrixPanel() : ""}</div></main>`;
 }
 
 function pageTitle() { return ({ overview: "Overview", profile: "Thesis profile", tasks: "Task review", evidence: "Zotero library", notes: "Evidence notes", integrations: "Connections", settings: "Settings", about: "About ThesisOS" })[state.view] || "Overview"; }
+
+function responseMatrixPanel() {
+  const count = state.projectState?.feedbackThreads?.length ?? 0;
+  if (!count) return "";
+  return `<section class="response-matrix panel"><div><span class="label">REVISION RESPONSE MATRIX</span><h2>Show what changed—and the evidence behind it.</h2><p>Export the approval trail your supervisor can review: comment, task, selected Zotero sources, and grounded-note status.</p></div>${button("Download Markdown matrix ↗", "export-response-matrix", "outline")}</section>`;
+}
 
 function landing() {
   return `<main class="first-run"><header class="first-run-nav"><a class="brand" href="/">ThesisOS<span>.</span></a><span>Local-first · reviewable by design</span></header><section class="first-run-hero"><div>${eyebrow("A guided lifecycle for thesis work")}<h1>Know what<br>comes next.</h1><p>ThesisOS reads the intent behind your thesis, keeps supervisor feedback intact, and turns it into evidence-backed work you approve.</p><div class="intro-actions">${button("Set up my thesis →", "start-onboarding")} ${button("Explore with demo data", "use-demo-library", "outline")}</div><small>Only the thesis name is required. Every connection can be added later.</small></div><aside class="outcome-preview"><span class="label">THE OUTCOME</span><ol><li><b>01</b><span>Establish what the thesis is trying to prove.</span></li><li><b>02</b><span>Capture feedback in the supervisor's own words.</span></li><li><b>03</b><span>Approve tasks and attach evidence from Zotero.</span></li></ol><p>Nothing writes to your thesis or vault without approval.</p></aside></section></main>`;
@@ -600,6 +606,23 @@ async function handleAction(action) {
     const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "zotero-library.json" });
     link.click();
     URL.revokeObjectURL(link.href);
+    return;
+  }
+  if (action === "export-response-matrix") {
+    if (state.workflowBusy) return;
+    beginActivity("response-matrix", "Preparing the revision response matrix…", "Reading the canonical approval and evidence trail.", "export-response-matrix");
+    try {
+      const response = await fetch("/api/revision-response-matrix");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "The revision response matrix could not be created.");
+      const blob = new Blob([payload.markdown], { type: "text/markdown;charset=utf-8" });
+      const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "thesisos-revision-response-matrix.md" });
+      link.click();
+      URL.revokeObjectURL(link.href);
+      completeActivity("Revision response matrix downloaded.", `${payload.rows.length} reviewable task${payload.rows.length === 1 ? "" : "s"} included.`);
+    } catch (error) {
+      failActivity(error, "export-response-matrix");
+    }
     return;
   }
   if (action === "rename-project") {

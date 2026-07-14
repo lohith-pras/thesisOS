@@ -26,6 +26,8 @@ supervisor feedback
 
 The researcher remains the decision-maker: rejected tasks cannot run, only selected source IDs can enter drafting, and filesystem writes are separate approvals.
 
+After a workflow runs, ThesisOS can export a **Revision Response Matrix**: a supervisor-readable Markdown table of each comment, proposed task, researcher decision, selected Zotero sources, and grounded-note status. It reports only the approval and evidence trail ThesisOS can verify; it never claims an unverified manuscript change.
+
 ThesisOS can also maintain `.thesisos/thesis-state.json` as the canonical record of links between feedback, manuscript citations, selected evidence, model-proposed claims, and researcher approvals. Zotero and the local thesis checkout remain authoritative for their native data; generated Obsidian views are deterministic and regenerable. See the [canonical workspace commands](docs/cli.md#canonical-revision-workspace).
 
 ## Quick start
@@ -72,6 +74,7 @@ Build-time GPT-5.6 usage and runtime model selection are separate. The detailed 
 - **Search boundary:** ThesisOS reads Zotero metadata but cannot alter the library.
 - **Evidence boundary:** drafting receives only reviewed evidence, and drafts containing unselected source IDs are rejected.
 - **Write boundary:** notes are previewed before a separate filesystem approval; judge mode cannot write at all.
+- **Revision boundary:** response-matrix exports are read-only views of the canonical approval and evidence trail.
 
 ## Paper maps and vault maintenance
 
