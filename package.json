@@ -16,7 +16,7 @@
     "test:browser": "node scripts/capture-submission.mjs --verify",
     "render:video": "node scripts/render-demo-video.mjs",
     "test": "node --test",
-    "check": "node --check scripts/capture-submission.mjs && node --check scripts/render-demo-video.mjs && node --check src/cli.mjs && node --check src/workspace-cli.mjs && node --check src/review-cli.mjs && node --check src/zotero-cli.mjs && node --check src/retrieval-eval-cli.mjs && node --check src/app-server.mjs && node --check src/core/revision-workflow.mjs && node --check src/core/workflow-runtime.mjs && node --check src/core/decompose.mjs && node --check src/core/state.mjs && node --check src/core/project-state.mjs && node --check src/core/project-document.mjs && node --check src/core/profile-extraction.mjs && node --check src/core/thesis-context.mjs && node --check src/core/thesis-scan.mjs && node --check src/core/citation-mapping.mjs && node --check src/core/claim-proposals.mjs && node --check src/core/claim-traceback.mjs && node --check src/core/workspace-renderer.mjs && node --check src/core/schema.mjs && node --check src/core/openai.mjs && node --check src/core/codex.mjs && node --check src/core/review.mjs && node --check src/core/zotero.mjs && node --check src/core/retrieval.mjs && node --check src/core/retrieval-evaluation.mjs && node --check src/core/embedding-cache.mjs && node --check src/core/evidence.mjs && node --check src/core/evidence-trail.mjs && node --check src/core/note-drafting.mjs && node --check src/core/obsidian.mjs && node --check src/core/demo-library.mjs && node --check src/core/revision-response-matrix.mjs",
+    "check": "node scripts/check-syntax.mjs",
     "check:frontend": "node --check app/app.js"
   },
   "engines": {
