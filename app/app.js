@@ -732,7 +732,13 @@ async function handleAction(action) {
       const shouldSearchLiterature = verb === "approve-task" && state.tasks.find((task) => task.id === taskId)?.kind === "literature" && state.connection.status === "connected";
       closeTaskModal();
       saveState();
-      if (shouldSearchLiterature) return handleAction("search-zotero");
+      if (shouldSearchLiterature) {
+        // The approval request owns the busy flag until its response arrives. Release it before
+        // handing off to the search action, which correctly refuses to start while busy.
+        state.workflowBusy = false;
+        state.workflowStatus = "";
+        return handleAction("search-zotero");
+      }
       completeActivity("Review decision saved.", "The task graph now reflects your approval boundary.");
       render();
     } catch (error) {

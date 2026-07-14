@@ -906,6 +906,11 @@ test("frontend provides a state-aware guide only for the demo workflow", async (
   assert.match(source, /seed-demo-feedback/);
 });
 
+test("frontend releases approval activity before handing off to the automatic literature search", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+  assert.match(source, /state\.workflowBusy = false;\s*state\.workflowStatus = "";\s*return handleAction\("search-zotero"\)/);
+});
+
 test("website design records the local-first Zotero connection flow", async () => {
   const design = await readFile(resolve("design.md"), "utf8");
   assert.match(design, /## Zotero connection user flow/);
