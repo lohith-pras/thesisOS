@@ -86,7 +86,7 @@ Show non-trivial working code, not a list of models or providers:
 - Stable source identifiers and structured evidence records.
 - Approval-state transitions and refusal behavior.
 - Grounded note generation tied to selected sources.
-- Current automated test result: 135 passing tests; re-run and update before submission.
+- Current automated test result: 136 passing tests; re-run and update before submission.
 
 ### 2. Design
 
@@ -150,7 +150,7 @@ Prepare these assets so each claim is visible without running the app:
 Only fix issues that protect the core demo:
 
 1. [x] Persist the canonical workflow across reloads.
-2. [ ] Restrict vault operations to the configured vault root.
+2. [x] Restrict vault operations to the configured vault root.
 3. [ ] Add and record one real browser-level happy-path test.
 4. [ ] Create deterministic demo fixtures or a safe fallback for external-service failure.
 

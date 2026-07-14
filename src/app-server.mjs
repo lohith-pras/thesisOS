@@ -146,6 +146,22 @@ export function createAppServer(dependencies = {}) {
   const canonicalStatePath = resolve(projectDir, ".thesisos", "thesis-state.json");
   const stateExists = async () => { try { await access(canonicalStatePath); return true; } catch { return false; } };
   const loadCanonicalState = async () => loadProjectState(canonicalStatePath);
+  const loadConfiguredVaultRoot = async () => {
+    if (await stateExists()) {
+      const state = await loadCanonicalState();
+      if (state.project.vaultPath) return resolve(state.project.vaultPath);
+    }
+    const legacyPath = await loadObsidianVault(projectDir);
+    return legacyPath ? resolve(legacyPath) : null;
+  };
+  const requireConfiguredVaultRoot = async (requestedPath) => {
+    const configuredRoot = await loadConfiguredVaultRoot();
+    if (!configuredRoot) throw httpError(409, "Configure an Obsidian vault before using vault operations.");
+    if (typeof requestedPath === "string" && requestedPath.trim() && resolve(requestedPath) !== configuredRoot) {
+      throw httpError(403, "Vault operations are restricted to the configured vault root.");
+    }
+    return configuredRoot;
+  };
   const canonicalWorkflow = (state) => {
     const thread = state.feedbackThreads.at(-1);
     if (!thread) return null;
@@ -277,7 +293,7 @@ export function createAppServer(dependencies = {}) {
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/obsidian/status") {
-        const vaultPath = await loadObsidianVault(projectDir);
+        const vaultPath = await loadConfiguredVaultRoot();
         sendJson(response, 200, { configured: Boolean(vaultPath), ...(vaultPath ? { vault: await inspectObsidianVault(vaultPath) } : {}) });
         return;
       }
@@ -293,10 +309,10 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/obsidian/audit") {
         const body = await readJsonBody(request);
-        if (typeof body.vaultPath !== "string" || !body.vaultPath.trim()) throw httpError(400, "An Obsidian vault path is required.");
         if (judgeMode) throw httpError(403, "Judge mode cannot inspect a local vault.");
+        const vaultRoot = await requireConfiguredVaultRoot(body.vaultPath);
         try {
-          sendJson(response, 200, await auditVault(resolve(body.vaultPath)));
+          sendJson(response, 200, await auditVault(vaultRoot));
         } catch (error) {
           throw httpError(400, error.message);
         }
@@ -306,6 +322,11 @@ export function createAppServer(dependencies = {}) {
         const body = await readJsonBody(request);
         if (!new Set(["existing", "create"]).has(body.mode)) throw httpError(400, "Vault mode must be 'existing' or 'create'.");
         const vault = await chooseObsidianVault(projectDir, { mode: body.mode, name: body.name });
+        if (await stateExists()) {
+          const current = await loadCanonicalState();
+          const state = updateProjectPaths(current, { vaultPath: vault.path, expectedRevision: current.revision });
+          await saveProjectState(canonicalStatePath, state);
+        }
         sendJson(response, 200, { configured: true, vault });
         return;
       }
@@ -497,8 +518,9 @@ export function createAppServer(dependencies = {}) {
       if (request.method === "POST" && url.pathname === "/api/workflow/notes/write") {
         if (judgeMode) throw httpError(403, "Judge mode is preview-only and cannot write to the filesystem.");
         const body = await readJsonBody(request);
+        const vaultRoot = await requireConfiguredVaultRoot(body.vaultPath);
         try {
-          const artifact = await writeNote(body.preview, { vaultPath: body.vaultPath, approved: body.approved });
+          const artifact = await writeNote(body.preview, { vaultPath: vaultRoot, approved: body.approved });
           sendJson(response, 201, artifact);
         } catch (error) {
           throw httpError(400, error.message);

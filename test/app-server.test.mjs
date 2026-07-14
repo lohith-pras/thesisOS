@@ -112,25 +112,73 @@ test("judge mode blocks filesystem writes", async () => {
 });
 
 test("creates a paper map and returns a read-only vault audit", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-vault-audit-test-"));
+  const vaultPath = join(projectDir, "vault");
   let auditedPath;
-  await withServer({
-    auditVault: async (path) => { auditedPath = path; return { mode: "read-only", statistics: { noteCount: 2 }, proposals: [] }; }
-  }, async (baseUrl) => {
-    const paper = await fetch(`${baseUrl}/api/papers/card`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: { sourceId: "group:1:A", title: "Paper A", abstract: "Grounded abstract" } })
-    });
-    const paperPayload = await paper.json();
-    assert.equal(paper.status, 200);
-    assert.equal(paperPayload.map.root.children[0].status, "grounded");
+  try {
+    const state = createProjectState({ project: "Audit thesis", vaultPath });
+    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state);
+    await withServer({
+      projectDir,
+      auditVault: async (path) => { auditedPath = path; return { mode: "read-only", statistics: { noteCount: 2 }, proposals: [] }; }
+    }, async (baseUrl) => {
+      const paper = await fetch(`${baseUrl}/api/papers/card`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: { sourceId: "group:1:A", title: "Paper A", abstract: "Grounded abstract" } })
+      });
+      const paperPayload = await paper.json();
+      assert.equal(paper.status, 200);
+      assert.equal(paperPayload.map.root.children[0].status, "grounded");
 
-    const audit = await fetch(`${baseUrl}/api/obsidian/audit`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vaultPath: "/tmp/vault" })
+      const audit = await fetch(`${baseUrl}/api/obsidian/audit`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vaultPath })
+      });
+      assert.equal(audit.status, 200);
+      assert.equal((await audit.json()).mode, "read-only");
+      assert.equal(auditedPath, vaultPath);
     });
-    assert.equal(audit.status, 200);
-    assert.equal((await audit.json()).mode, "read-only");
-    assert.equal(auditedPath, "/tmp/vault");
-  });
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test("rejects vault audit and note writes outside the configured canonical vault root", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-vault-boundary-test-"));
+  const configuredVault = join(projectDir, "configured-vault");
+  const outsideVault = join(projectDir, "outside-vault");
+  let auditInvoked = false;
+  let writeInvoked = false;
+  try {
+    const state = createProjectState({ project: "Boundary thesis", vaultPath: configuredVault });
+    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state);
+    await withServer({
+      projectDir,
+      auditVault: async () => { auditInvoked = true; return {}; },
+      writeNote: async () => { writeInvoked = true; return {}; }
+    }, async (baseUrl) => {
+      const audit = await fetch(`${baseUrl}/api/obsidian/audit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vaultPath: outsideVault })
+      });
+      const auditBody = await audit.json();
+      assert.equal(audit.status, 403);
+      assert.match(auditBody.message, /configured vault root/i);
+
+      const write = await fetch(`${baseUrl}/api/workflow/notes/write`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vaultPath: outsideVault, approved: true, preview: { filename: "note.md", markdown: "# Note" } })
+      });
+      const writeBody = await write.json();
+      assert.equal(write.status, 403);
+      assert.match(writeBody.message, /configured vault root/i);
+      assert.equal(auditInvoked, false);
+      assert.equal(writeInvoked, false);
+    });
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
 });
 
 test("returns a selectable library catalog when automatic selection is ambiguous", async () => {
@@ -520,9 +568,12 @@ test("note preview rejects a draft that cites evidence the user did not select",
 });
 
 test("writes an Obsidian note only with explicit approval", async () => {
-  const vaultPath = await mkdtemp(join(tmpdir(), "thesisos-vault-"));
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-note-write-test-"));
+  const vaultPath = join(projectDir, "vault");
   try {
-    await withServer({}, async (baseUrl) => {
+    const state = createProjectState({ project: "ISAC thesis", vaultPath });
+    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state);
+    await withServer({ projectDir }, async (baseUrl) => {
       const previewResponse = await fetch(`${baseUrl}/api/workflow/notes/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -554,7 +605,7 @@ test("writes an Obsidian note only with explicit approval", async () => {
       assert.equal(await readFile(artifact.path, "utf8"), preview.markdown);
     });
   } finally {
-    await rm(vaultPath, { recursive: true, force: true });
+    await rm(projectDir, { recursive: true, force: true });
   }
 });
 
