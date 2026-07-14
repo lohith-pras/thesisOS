@@ -25,6 +25,7 @@ import { buildThesisContext } from "./core/thesis-context.mjs";
 import { mapBibliographyToSources } from "./core/citation-mapping.mjs";
 import { createPaperCard, paperMap } from "./core/paper-map.mjs";
 import { auditObsidianVault } from "./core/vault-audit.mjs";
+import { attachCanonicalEvidence, recordCanonicalDraft, workflowReadModel } from "./core/workflow.mjs";
 
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_DIR = resolve(SOURCE_DIR, "..");
@@ -145,6 +146,18 @@ export function createAppServer(dependencies = {}) {
   const canonicalStatePath = resolve(projectDir, ".thesisos", "thesis-state.json");
   const stateExists = async () => { try { await access(canonicalStatePath); return true; } catch { return false; } };
   const loadCanonicalState = async () => loadProjectState(canonicalStatePath);
+  const canonicalWorkflow = (state) => {
+    const thread = state.feedbackThreads.at(-1);
+    if (!thread) return null;
+    const workflow = workflowReadModel(state, thread.id);
+    const preview = workflow.draft ? previewNote({
+      project: state.project.name,
+      feedback: workflow.feedback,
+      evidenceRefs: workflow.selectedEvidence,
+      draft: workflow.draft
+    }) : null;
+    return { ...workflow, preview };
+  };
 
   return createServer(async (request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
@@ -152,7 +165,7 @@ export function createAppServer(dependencies = {}) {
       if (request.method === "GET" && url.pathname === "/api/project") {
         if (!await stateExists()) { sendJson(response, 200, { initialized: false }); return; }
         const state = await loadCanonicalState();
-        sendJson(response, 200, { initialized: true, state, readiness: profileReadiness(state) });
+        sendJson(response, 200, { initialized: true, state, readiness: profileReadiness(state), workflow: canonicalWorkflow(state) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/init") {
@@ -426,6 +439,15 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/workflow/evidence/select") {
         const body = await readJsonBody(request);
+        if (body.feedbackThreadId && await stateExists()) {
+          try {
+            const state = attachCanonicalEvidence(await loadCanonicalState(), body, { searchArtifact: body.searchArtifact });
+            await saveProjectState(canonicalStatePath, state);
+            const workflow = canonicalWorkflow(state);
+            sendJson(response, 200, { state, workflow, taskGraph: workflow.taskGraph, selection: workflow.evidenceSelection });
+          } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
+          return;
+        }
         try {
           sendJson(response, 200, selectEvidence(body.taskGraph, body.searchArtifact, body.sourceIds));
         } catch (error) {
@@ -445,17 +467,31 @@ export function createAppServer(dependencies = {}) {
       if (request.method === "POST" && url.pathname === "/api/workflow/notes/draft") {
         const body = await readJsonBody(request);
         if (body.approvedExternalProcessing !== true) throw httpError(400, "Explicit approval is required before sending selected evidence to the drafting provider.");
-        if (judgeMode) {
-          sendJson(response, 200, draftFallback(body.feedback, body.evidenceRefs, "Judge mode uses the deterministic grounded template and does not call an external drafting API."));
-          return;
-        }
+        const canonical = body.feedbackThreadId && await stateExists() ? await loadCanonicalState() : null;
+        const thread = canonical?.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
+        if (canonical && !thread) throw httpError(404, "Feedback thread was not found.");
+        const selectedEvidence = canonical
+          ? canonical.evidence.filter((record) => record.feedbackThreadId === body.feedbackThreadId && record.taskId === body.taskId)
+          : body.evidenceRefs;
+        const draftInput = canonical ? { ...body, feedback: thread.feedback, evidenceRefs: selectedEvidence } : body;
+        let draft;
         try {
-          if (body.provider === "codex") sendJson(response, 200, await draftCodex(body, { model: body.model, cwd: projectDir }));
-          else sendJson(response, 200, await draftOpenAI(body, { model: body.model }));
+          if (judgeMode) draft = draftFallback(draftInput.feedback, draftInput.evidenceRefs, "Judge mode uses the deterministic grounded template and does not call an external drafting API.");
+          else if (body.provider === "codex") draft = await draftCodex(draftInput, { model: body.model, cwd: projectDir });
+          else draft = await draftOpenAI(draftInput, { model: body.model });
         } catch (error) {
           const providerLabel = body.provider === "codex" ? "Codex CLI drafting unavailable" : "GPT-5.6 drafting unavailable";
-          sendJson(response, 200, draftFallback(body.feedback, body.evidenceRefs, `${providerLabel}; deterministic template used. ${error.message}`));
+          draft = draftFallback(draftInput.feedback, draftInput.evidenceRefs, `${providerLabel}; deterministic template used. ${error.message}`);
         }
+        if (canonical) {
+          try {
+            const state = recordCanonicalDraft(canonical, { ...body, draft }, { provider: draft.provider ?? body.provider, model: draft.model ?? body.model });
+            await saveProjectState(canonicalStatePath, state);
+            sendJson(response, 200, { ...draft, state, workflow: canonicalWorkflow(state) });
+          } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
+          return;
+        }
+        sendJson(response, 200, draft);
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/workflow/notes/write") {

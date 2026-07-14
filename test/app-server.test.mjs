@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolve } from "node:path";
 import { decomposeFeedback } from "../src/core/decompose.mjs";
+import { createProjectState, saveProjectState } from "../src/core/project-state.mjs";
 
 async function appServerModule() {
   try {
@@ -363,6 +364,111 @@ test("attaches selected Zotero candidates as structured evidence references", as
   });
 });
 
+test("recovers approved tasks, selected evidence, and grounded draft from canonical state after restart", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-reload-test-"));
+  try {
+    const state = createProjectState({ project: "ISAC thesis" }, { now: "2026-07-14T00:00:00.000Z" });
+    state.feedbackThreads = [{
+      id: "feedback-1",
+      title: "Section 3.2",
+      feedback: "Strengthen the evidence in section 3.2.",
+      status: "in_progress",
+      createdAt: "2026-07-14T00:00:00.000Z",
+      tasks: [{
+        id: "task-literature",
+        kind: "literature",
+        title: "Review supporting literature",
+        tool: "zotero",
+        status: "ready",
+        approvalStatus: "pending",
+        dependsOn: [],
+        evidence: ["Identify supporting evidence"]
+      }]
+    }];
+    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state);
+
+    const searchArtifact = {
+      schemaVersion: 1,
+      taskId: "task-literature",
+      query: "supporting evidence",
+      retrieval: { mode: "hybrid-semantic" },
+      candidates: [{
+        key: "ABC123",
+        sourceId: "group:6568124:ABC123",
+        sourceLibrary: { type: "group", id: "6568124", name: "Research" },
+        title: "Distributed ISAC",
+        creators: ["Ada Author"],
+        year: "2025",
+        abstract: "Grounded evidence.",
+        tags: ["ISAC"],
+        doi: "10.1000/isac",
+        url: "https://example.test/isac",
+        matchScore: 0.9,
+        matchReasons: ["Semantic match"],
+        indexedFrom: "abstract-backed"
+      }]
+    };
+
+    await withServer({
+      projectDir,
+      draftCodex: async () => ({
+        overview: "Grounded overview",
+        sourceNotes: [{ sourceId: "group:6568124:ABC123", summary: "Supported", relevance: "Direct" }]
+      })
+    }, async (baseUrl) => {
+      const reviewResponse = await fetch(`${baseUrl}/api/workflow/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedbackThreadId: "feedback-1", taskId: "task-literature", decision: "approved", expectedRevision: 1 })
+      });
+      const reviewed = await reviewResponse.json();
+      assert.equal(reviewResponse.status, 200);
+
+      const evidenceResponse = await fetch(`${baseUrl}/api/workflow/evidence/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedbackThreadId: "feedback-1",
+          taskId: "task-literature",
+          expectedRevision: reviewed.state.revision,
+          searchArtifact,
+          sourceIds: ["group:6568124:ABC123"]
+        })
+      });
+      const evidence = await evidenceResponse.json();
+      assert.equal(evidenceResponse.status, 200);
+
+      const draftResponse = await fetch(`${baseUrl}/api/workflow/notes/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedbackThreadId: "feedback-1",
+          taskId: "task-literature",
+          expectedRevision: evidence.state.revision,
+          approvedExternalProcessing: true,
+          provider: "codex"
+        })
+      });
+      assert.equal(draftResponse.status, 200);
+    });
+
+    await withServer({ projectDir }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/project`);
+      const payload = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(payload.workflow.feedbackThreadId, "feedback-1");
+      assert.equal(payload.workflow.tasks[0].approvalStatus, "approved");
+      assert.equal(payload.workflow.selectedEvidence[0].sourceId, "group:6568124:ABC123");
+      assert.equal(payload.workflow.draft.overview, "Grounded overview");
+      assert.match(payload.workflow.preview.markdown, /Grounded overview/);
+      assert.match(payload.workflow.preview.markdown, /group:6568124:ABC123/);
+      assert.equal(payload.workflow.nextAllowedAction.id, "preview-evidence-note");
+    });
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
 test("previews an evidence-linked Obsidian note without writing a file", async () => {
   const evidenceRefs = [{
     sourceId: "group:6568124:ABC123",
@@ -538,6 +644,17 @@ test("frontend records selected papers through the evidence selection API", asyn
   assert.match(source, /selectedSourceIds/);
   assert.match(source, /candidates\.filter\(\(candidate\) => selectedIds\.has\(candidate\.sourceId\)\)/);
   assert.match(source, /evidenceRefs/);
+});
+
+test("frontend rehydrates the canonical workflow and sends revisioned evidence and draft mutations", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+
+  assert.match(source, /function applyCanonicalWorkflow\(workflow\)/);
+  assert.match(source, /if \(payload\.workflow\) applyCanonicalWorkflow\(payload\.workflow\)/);
+  assert.match(source, /feedbackThreadId: state\.feedbackThreadId/);
+  assert.match(source, /taskId: literatureTask\.id/);
+  assert.match(source, /expectedRevision: state\.projectState\.revision/);
+  assert.match(source, /state\.notePreview = workflow\.preview/);
 });
 
 test("frontend promotes attached evidence to a dedicated Codex notes step", async () => {

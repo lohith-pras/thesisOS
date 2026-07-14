@@ -81,18 +81,29 @@ export function workflowReadModel(state, feedbackThreadId) {
   validateProjectState(state);
   const thread = requireThread(state, feedbackThreadId);
   const selectedEvidence = state.evidence.filter((record) => record.feedbackThreadId === thread.id);
+  const draft = selectedEvidence.find((record) => record.draft)?.draft ?? null;
   const approvedLiteratureTask = thread.tasks.find((task) => task.kind === "literature" && task.approvalStatus === "approved");
   const nextAllowedAction = !approvedLiteratureTask
     ? { id: "review-tasks", label: "Review the literature task before selecting evidence" }
     : selectedEvidence.length === 0
       ? { id: "select-evidence", label: "Select Zotero evidence" }
-      : { id: "draft-evidence-note", label: "Draft a grounded evidence note" };
+      : draft
+        ? { id: "preview-evidence-note", label: "Review the grounded evidence note" }
+        : { id: "draft-evidence-note", label: "Draft a grounded evidence note" };
   return {
     feedbackThreadId: thread.id,
     feedback: thread.feedback,
     tasks: thread.tasks,
+    taskGraph: taskGraphForThread(thread),
     selectedEvidence,
-    draftStatus: selectedEvidence.some((record) => record.draft) ? "available" : "not_started",
+    evidenceSelection: selectedEvidence.length ? {
+      taskId: selectedEvidence[0].taskId,
+      selectedAt: selectedEvidence[0].selectedAt,
+      selectedCount: selectedEvidence.length,
+      evidenceRefs: selectedEvidence
+    } : null,
+    draft,
+    draftStatus: draft ? "available" : "not_started",
     previewStatus: selectedEvidence.some((record) => record.preview) ? "available" : "not_started",
     nextAllowedAction
   };

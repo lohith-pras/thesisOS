@@ -328,6 +328,19 @@ function applyConnection(payload) {
   state.papers = payload.papers || [];
 }
 
+function applyCanonicalWorkflow(workflow) {
+  state.feedbackThreadId = workflow.feedbackThreadId;
+  state.feedback = workflow.feedback;
+  state.tasks = workflow.tasks;
+  state.taskGraph = workflow.taskGraph;
+  state.evidenceSelection = workflow.evidenceSelection;
+  state.evidenceRefs = workflow.selectedEvidence;
+  state.selectedSourceIds = workflow.selectedEvidence.map(({ sourceId }) => sourceId);
+  state.noteDraft = workflow.draft;
+  state.notePreview = workflow.preview;
+  state.noteWrite = null;
+}
+
 async function requestConnection(path, options) {
   const isLibrarySelection = path === "/api/zotero/select";
   beginActivity("zotero", isLibrarySelection ? "Loading the selected Zotero library…" : "Checking Zotero Desktop…", isLibrarySelection ? "Reading bibliographic metadata only." : "Looking for the running local connector.", "connect-zotero");
@@ -438,19 +451,32 @@ async function handleAction(action) {
         ...state.searchArtifact,
         candidates: state.searchArtifact.candidates.filter((candidate) => selectedIds.has(candidate.sourceId))
       };
+      const literatureTask = state.tasks.find((task) => task.id === selectedSearchArtifact.taskId)
+        ?? state.tasks.find((task) => task.kind === "literature" && task.approvalStatus === "approved");
+      if (!literatureTask) throw new Error("An approved literature task is required before attaching evidence.");
       const response = await fetch("/api/workflow/evidence/select", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskGraph: state.taskGraph, searchArtifact: selectedSearchArtifact, sourceIds: state.selectedSourceIds })
+        body: JSON.stringify(state.feedbackThreadId ? {
+          feedbackThreadId: state.feedbackThreadId,
+          taskId: literatureTask.id,
+          expectedRevision: state.projectState.revision,
+          searchArtifact: selectedSearchArtifact,
+          sourceIds: state.selectedSourceIds
+        } : { taskGraph: state.taskGraph, searchArtifact: selectedSearchArtifact, sourceIds: state.selectedSourceIds })
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "The selected evidence could not be attached.");
-      state.taskGraph = payload.taskGraph;
-      state.tasks = payload.taskGraph.tasks;
-      state.evidenceSelection = payload.selection;
-      state.evidenceRefs = payload.selection.evidenceRefs;
-      state.noteDraft = null;
-      state.notePreview = null;
+      if (payload.state?.schemaVersion === 3) state.projectState = payload.state;
+      if (payload.workflow) applyCanonicalWorkflow(payload.workflow);
+      else {
+        state.taskGraph = payload.taskGraph;
+        state.tasks = payload.taskGraph.tasks;
+        state.evidenceSelection = payload.selection;
+        state.evidenceRefs = payload.selection.evidenceRefs;
+        state.noteDraft = null;
+        state.notePreview = null;
+      }
       state.noteWrite = null;
       state.view = "notes";
       state.activity = { ...state.activity, recoveryAction: null };
@@ -466,23 +492,36 @@ async function handleAction(action) {
     if (state.workflowBusy) return;
     beginActivity("codex-draft", "Codex CLI is drafting from the selected evidence…", "Only the selected papers and feedback are being used.", "draft-evidence-note");
     try {
+      const literatureTask = state.tasks.find((task) => task.kind === "literature" && task.approvalStatus === "approved");
+      if (!literatureTask) throw new Error("An approved literature task is required before drafting.");
       const draftResponse = await fetch("/api/workflow/notes/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedback: state.feedback, evidenceRefs: state.evidenceRefs, approvedExternalProcessing: true, provider: "codex" })
+        body: JSON.stringify(state.feedbackThreadId ? {
+          feedbackThreadId: state.feedbackThreadId,
+          taskId: literatureTask.id,
+          expectedRevision: state.projectState.revision,
+          approvedExternalProcessing: true,
+          provider: "codex"
+        } : { feedback: state.feedback, evidenceRefs: state.evidenceRefs, approvedExternalProcessing: true, provider: "codex" })
       });
       const draft = await draftResponse.json();
       if (!draftResponse.ok) throw new Error(draft.message || "The grounded draft could not be created.");
-      updateActivity("Building the grounded note preview…", "No filesystem write has happened.");
-      const previewResponse = await fetch("/api/workflow/notes/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: state.project, feedback: state.feedback, evidenceRefs: state.evidenceRefs, draft })
-      });
-      const preview = await previewResponse.json();
-      if (!previewResponse.ok) throw new Error(preview.message || "The grounded note preview could not be created.");
-      state.noteDraft = draft;
-      state.notePreview = preview;
+      if (draft.state?.schemaVersion === 3 && draft.workflow) {
+        state.projectState = draft.state;
+        applyCanonicalWorkflow(draft.workflow);
+      } else {
+        updateActivity("Building the grounded note preview…", "No filesystem write has happened.");
+        const previewResponse = await fetch("/api/workflow/notes/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project: state.project, feedback: state.feedback, evidenceRefs: state.evidenceRefs, draft })
+        });
+        const preview = await previewResponse.json();
+        if (!previewResponse.ok) throw new Error(preview.message || "The grounded note preview could not be created.");
+        state.noteDraft = draft;
+        state.notePreview = preview;
+      }
     } catch (error) {
       failActivity(error, "draft-evidence-note");
     } finally {
@@ -769,6 +808,8 @@ fetch("/api/project").then((response) => response.json()).then((payload) => {
     state.projectState = payload.state;
     state.profileReadiness = payload.readiness;
     state.project = payload.state.project.name;
+    state.feedbackTitle = payload.state.feedbackThreads.at(-1)?.title || state.feedbackTitle;
+    if (payload.workflow) applyCanonicalWorkflow(payload.workflow);
     saveState();
     render();
   } else { state.projectState = null; render(); }
