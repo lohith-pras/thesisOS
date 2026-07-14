@@ -12,9 +12,11 @@ Turn supervisor feedback into an approval-gated, evidence-backed research trail.
 
 Education
 
-## Codex session ID
+## Codex GPT-5.6 build and feedback ID
 
 `019f5cc1-08be-7071-a5ea-220a8de0f313`
+
+The submitted feedback receipt is preserved at [`docs/assets/codex-feedback-receipt.png`](assets/codex-feedback-receipt.png).
 
 ## What it does
 
@@ -26,11 +28,11 @@ The project is a Node.js local-first application. Codex CLI turns messy feedback
 
 ## How Codex helped
 
-Codex drove the architecture review, connector implementation, retrieval evaluation, approval-state debugging, tests, documentation, and automated browser media capture. The core build session is included above for judging.
+ThesisOS was designed and implemented with Codex using GPT-5.6. In the primary build session, Codex implemented and debugged the Zotero-to-evidence workflow, separated semantic retrieval from the Zotero transport, added local fallback and retrieval evaluation, built approval-gated grounded drafting with citation validation, created deterministic judge mode, and verified the result through automated tests. The semantic-retrieval work from this session was merged in commit `85067b1`. The verified build and feedback ID is included above for judging.
 
 ## How Codex and GPT-5.6 are used
 
-Codex CLI is the primary runtime for decomposition and grounded drafting. It uses the authenticated local session, an ephemeral read-only execution, and strict structured output. It receives only the supervisor feedback and selected evidence context. Every citation must match a selected stable Zotero source ID. GPT-5.6 remains available as an explicitly configured API adapter with `store: false`. When the selected model is unavailable, ThesisOS labels and uses a deterministic template rather than hiding the failure.
+Build-time and runtime use are intentionally separate. Codex with GPT-5.6 built the submitted project and is evidenced by the verified session above. At runtime, Codex CLI is the default for decomposition and grounded drafting; it uses an authenticated local session, ephemeral read-only execution, and strict structured output. GPT-5.6 is also available as an explicitly configured API adapter with `store: false`, but that optional adapter is not the project's hackathon eligibility claim. Every runtime citation must match a researcher-selected stable Zotero source ID, and unavailable models produce a labelled deterministic fallback.
 
 ## Challenges
 

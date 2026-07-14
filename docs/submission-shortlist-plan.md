@@ -1,12 +1,12 @@
 # ThesisOS Shortlist Plan
 
-Status: strategy only; review before changing the product or submission copy.
+Status: active submission-hardening plan.
 
 ## Decision on GPT-5.6
 
 The submission requirement is best read as: build the project **using Codex with GPT-5.6**, then show and document that build process. It does not clearly require ThesisOS to call GPT-5.6 at runtime.
 
-Before making the claim, verify that the primary Codex build session actually used GPT-5.6. Include the required `/feedback` session ID and show one or two concrete examples of what Codex with GPT-5.6 contributed: an architecture decision, implementation diff, debugging result, or test suite.
+The primary build session is verified as GPT-5.6 and its feedback was submitted. The build and feedback ID is `019f5cc1-08be-7071-a5ea-220a8de0f313`; the receipt is preserved at [`docs/assets/codex-feedback-receipt.png`](assets/codex-feedback-receipt.png). The submission should show concrete contributions from that session: the Zotero-to-evidence workflow, semantic retrieval and evaluation, grounded drafting, judge mode, and automated verification.
 
 Keep these two claims separate:
 
@@ -64,10 +64,10 @@ The first two sentences of the Devpost description should explicitly establish:
 
 Blocking checklist:
 
-- [ ] Confirm the qualifying Codex session used GPT-5.6.
-- [ ] Include the `/feedback` session ID.
+- [x] Confirm the qualifying Codex session used GPT-5.6.
+- [x] Include the `/feedback` session ID.
 - [ ] Public repository opens without permission requests.
-- [ ] README contains exact setup and demo instructions.
+- [x] README contains exact setup and demo instructions.
 - [ ] Public YouTube demo is under three minutes and includes audio.
 - [ ] Video explicitly covers both what was built and how Codex with GPT-5.6 was used.
 - [ ] Product behavior, README claims, screenshots, and video agree.
@@ -86,7 +86,7 @@ Show non-trivial working code, not a list of models or providers:
 - Stable source identifiers and structured evidence records.
 - Approval-state transitions and refusal behavior.
 - Grounded note generation tied to selected sources.
-- Current automated test result: 132 passing tests; re-run and update before submission.
+- Current automated test result: 133 passing tests; re-run and update before submission.
 
 ### 2. Design
 

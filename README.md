@@ -65,11 +65,15 @@ ThesisOS runs on macOS, Windows, and Linux with Node.js 22+. The optional submis
 
 ## How Codex and GPT-5.6 are used
 
+ThesisOS was designed and implemented with Codex using GPT-5.6. In the primary build session, Codex helped implement and debug the Zotero-to-evidence workflow, semantic retrieval with local fallback and evaluation, grounded drafting with citation validation, deterministic judge mode, and automated verification. That session produced the semantic-retrieval work merged in `85067b1`.
+
+Primary build and feedback ID: `019f5cc1-08be-7071-a5ea-220a8de0f313` ([feedback receipt](docs/assets/codex-feedback-receipt.png)).
+
 Codex CLI is the primary runtime. It decomposes messy feedback and drafts grounded notes through the authenticated local CLI, using strict JSON schemas and read-only ephemeral sessions. It does not require `OPENAI_API_KEY`.
 
 GPT-5.6 remains an optional API adapter for users who explicitly configure `OPENAI_API_KEY`. It receives only supervisor feedback and selected evidence, uses `store: false`, and its output is checked against the selected source IDs. If a model is unavailable, ThesisOS labels the deterministic local fallback instead of hiding the failure.
 
-Codex helped build the architecture, Zotero connector, retrieval evaluation, approval state, tests, and judge-mode capture. The primary build session is recorded in the [submission notes](docs/devpost-submission.md).
+Build-time GPT-5.6 usage and runtime model selection are separate: the hackathon evidence is the verified Codex build session above, not the optional runtime API adapter. Additional details are recorded in the [submission notes](docs/devpost-submission.md).
 
 ## Product guardrails
 
@@ -95,7 +99,7 @@ Codex helped build the architecture, Zotero connector, retrieval evaluation, app
 
 ## Submission
 
-Codex build session: `019f5cc1-08be-7071-a5ea-220a8de0f313`
+Verified Codex GPT-5.6 build and `/feedback` ID: `019f5cc1-08be-7071-a5ea-220a8de0f313`
 
 See the [submission copy and checklist](docs/devpost-submission.md) for the demo, category, and remaining manual submission steps.
 
