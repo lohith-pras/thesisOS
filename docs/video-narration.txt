@@ -12,9 +12,10 @@ Screen: Overview. Keep the demo badge and empty review trail visible.
 Say: “Reviewer feedback names a problem, not the paper that proves it.”
 Say: “Proofline turns that comment into an evidence trail the researcher can inspect.”
 
-0:10–0:18 — The promise
-Screen: Point to the demo guide and the Write boundary language.
-Say: “It is local-first: Zotero stays read-only, and nothing writes without explicit approval.”
+0:10–0:18 — The connected workspace
+Screen: Open Connections. Hold on the VS Code, Obsidian, and Overleaf cards.
+Say: “Proofline connects the work around research: VS Code, Obsidian, and Overleaf.”
+Say: “Each is optional, project-scoped, and stays under the researcher’s control.”
 
 0:18–0:23 — Set up the wow moment
 Screen: Click “Show completed proof.” Pause while the Evidence notes view loads.
@@ -29,7 +30,7 @@ Say: “Every link is drawn from canonical local state—not a generated story.�
 0:38–0:49 — Grounded note
 Screen: Show the grounded note preview and the stable source ID.
 Say: “The note only uses papers the researcher selected as evidence.”
-Say: “Judge mode previews this result, but cannot write to the filesystem.”
+Say: “In a real vault, Obsidian receives this note only after a separate approval.”
 
 0:49–1:01 — Boundary proof
 Screen: Click “Test citation boundary.” Hold on the green rejection confirmation.
@@ -54,4 +55,5 @@ Recording checklist
 - Claim Traceback appears before the halfway point.
 - The citation-rejection confirmation is readable and held for two seconds.
 - Do not claim that the demo writes to Obsidian; it deliberately cannot.
+- Say that Overleaf is URL-only: Proofline opens the researcher’s project but never signs in or syncs it.
 - Export or show the response matrix only after explaining it is read-only.

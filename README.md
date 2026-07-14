@@ -33,6 +33,16 @@ After a workflow runs, Proofline can export a **Revision Response Matrix**: a re
 
 Proofline maintains the legacy-compatible `.thesisos/thesis-state.json` as the canonical record of links between feedback, manuscript citations, selected evidence, model-proposed claims, and researcher approvals. Zotero and the local research checkout remain authoritative for their native data; generated Obsidian views are deterministic and regenerable. See the [canonical workspace commands](docs/cli.md#canonical-revision-workspace).
 
+## Connections stay in their own lane
+
+Proofline connects the research tools around the evidence loop without pretending to replace them:
+
+- **VS Code:** choose an existing folder or create a local code workspace, then open that configured folder in VS Code.
+- **Obsidian:** choose an existing vault or scaffold a research vault with `10_Literature_Notes`, resources, implementation, and research-note folders. Notes are previewed before an explicit write approval.
+- **Overleaf:** create a project in your own Overleaf account or store its `overleaf.com` URL. Proofline opens that URL in the browser; it does not sign in, sync, or edit Overleaf files.
+
+Each location is optional and saved only for the current project.
+
 ## Quick start
 
 For judges and reviewers, start the complete credential-free fixture workflow:
@@ -44,7 +54,7 @@ npm run app -- --demo
 
 Open [http://127.0.0.1:4173](http://127.0.0.1:4173). Demo mode uses a clearly labelled fixture library, falls back safely when Codex is unavailable, and never writes to the filesystem. For the fastest judge walkthrough, choose **Show completed proof**: it replays the same approval-gated fixture transitions and opens Claim Traceback at the completed evidence trail. Choose **Test citation boundary** to watch a draft containing an unselected source ID be refused before preview.
 
-For a real project, choose **Set up my research** and enter a name. Every other step is optional: import a PDF/Markdown/text project description, connect Zotero, link a local or Overleaf Git manuscript folder, initialize an Obsidian vault, and record the selected scope or stage. Feedback can be captured immediately; task decomposition remains locked until the minimum brief is approved so generated work always has project context.
+For a real project, choose **Set up my research** and enter a name. Every other step is optional: import a PDF/Markdown/text project description, connect Zotero, choose a VS Code folder, initialize an Obsidian vault, add an Overleaf URL, and record the selected scope or stage. Feedback can be captured immediately; task decomposition remains locked until the minimum brief is approved so generated work always has project context.
 
 For the real local workflow, keep Zotero Desktop running and use:
 
