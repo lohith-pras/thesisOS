@@ -15,6 +15,29 @@ function yamlString(value) {
   return JSON.stringify(String(value));
 }
 
+export function createEvidenceNoteReadModel({ project, feedback, evidenceRefs, draft }, preview) {
+  return {
+    schemaVersion: 1,
+    title: preview.title,
+    feedback: requireText(feedback, "Supervisor feedback"),
+    synthesis: draft ? { overview: draft.overview, provider: draft.provider, model: draft.model ?? null } : null,
+    sources: evidenceRefs.map((reference, index) => {
+      const sourceNote = draft?.sourceNotes?.find((note) => note.sourceId === reference.sourceId) ?? null;
+      return {
+        ordinal: index + 1,
+        sourceId: reference.sourceId,
+        title: reference.title,
+        year: reference.year ?? null,
+        venue: reference.publicationTitle ?? null,
+        doi: reference.doi ?? null,
+        sourceUrl: reference.doi ? `https://doi.org/${reference.doi}` : reference.url ?? null,
+        summary: sourceNote?.summary ?? null,
+        relevance: sourceNote?.relevance ?? null
+      };
+    })
+  };
+}
+
 export function createObsidianNotePreview({ project, feedback, evidenceRefs, draft }, options = {}) {
   const projectName = requireText(project, "Project name");
   const sourceFeedback = requireText(feedback, "Supervisor feedback");
@@ -33,7 +56,8 @@ export function createObsidianNotePreview({ project, feedback, evidenceRefs, dra
   const synthesis = draft ? `## Grounded synthesis\n\n${draft.overview}\n\n${draft.sourceNotes.map((note) => `### [${note.sourceId}]\n\n${note.summary}\n\n**Relevance:** ${note.relevance}`).join("\n\n")}\n\n> Draft provider: ${draft.provider}${draft.model && draft.model !== "none" ? ` · ${draft.model}` : ""}. Verify every statement before thesis use.\n\n` : "";
   const markdown = `---\ntitle: ${yamlString(title)}\nproject: ${yamlString(projectName)}\ncreated: ${yamlString(createdAt)}\nsource_count: ${evidenceRefs.length}\nmanaged_by: thesisos\ntags:\n  - thesisos\n  - literature-evidence\n---\n\n# ${title}\n\n## Supervisor feedback\n\n> ${sourceFeedback.replaceAll("\n", "\n> ")}\n\n${synthesis}## Evidence sources\n\n${sources}`;
 
-  return { schemaVersion: 1, title, filename, createdAt, sourceCount: evidenceRefs.length, markdown, writeApproved: false };
+  const preview = { schemaVersion: 1, title, filename, createdAt, sourceCount: evidenceRefs.length, markdown, writeApproved: false };
+  return { ...preview, readModel: createEvidenceNoteReadModel({ project: projectName, feedback: sourceFeedback, evidenceRefs, draft }, preview) };
 }
 
 export async function writeObsidianNote(preview, { vaultPath, approved, mkdirImpl = mkdir, readFileImpl = readFile, writeFileImpl = writeFile } = {}) {

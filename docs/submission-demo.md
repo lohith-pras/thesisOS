@@ -10,13 +10,13 @@ Open `http://127.0.0.1:4173`.
 
 ## Under-three-minute recording script
 
-1. **Problem (0:00–0:20):** Supervisor feedback is unstructured, paper titles rarely match its wording, and autonomous research tools can write without a traceable approval boundary.
-2. **Feedback and Codex (0:20–0:50):** Paste a realistic supervisor email. Show Codex CLI decomposition into a validated task graph. Mention the visible deterministic fallback for judge machines without Codex.
-3. **Grounded retrieval (0:50–1:20):** Approve the literature task and search the fixture or live Zotero library. Point out retrieval mode, match score, and stable source ID.
-4. **Evidence boundary (1:20–1:45):** Select one or two reviewed papers and attach them. Explain that only selected stable source IDs can enter drafting.
-5. **Grounded drafting and Claim Traceback (1:45–2:10):** Draft the note, show its source-ID citations and provider label, then click Claim Traceback. Show source note → selected Zotero evidence → approved task → original feedback. Say it traces a grounded source note, not an unverified manuscript sentence.
-6. **Trust payoff (2:10–2:25):** Show that an unapproved task cannot search and an unknown citation invalidates a draft. Judge mode also stops before filesystem writing.
-7. **Revision response matrix (2:25–2:35):** Return to Overview and download the matrix. Show comment → task → selected Zotero source IDs → grounded-note status, then say it never claims a manuscript change ThesisOS cannot verify.
+1. **Problem and thesis context (0:00–0:25):** Open the Profile view. Show the demo thesis: workplace EV charging flexibility for distribution-grid congestion management, its two objectives, focused scope, and literature stage. State that the demo library contains real publication metadata, but is clearly labelled fixture data.
+2. **Feedback choices (0:25–0:45):** On Overview, show the three demo choices: vague framing, challenge a claim, and test feasibility. Choose **Challenge a claim** to demonstrate a reviewer asking the student to qualify an over-strong statement.
+3. **Bounded tasks (0:45–1:05):** Generate tasks. Show that judge mode proposes only the two available workflow steps: read-only Zotero evidence review and an Obsidian evidence note—no simulated thesis-repository task.
+4. **Grounded retrieval (1:05–1:30):** Approve the literature task and search the smart-EV-charging fixture. Point out the match reason, DOI, and stable source ID.
+5. **Evidence boundary (1:30–1:50):** Select two papers with contrasting evidence and attach them. Explain that only selected stable source IDs can enter drafting.
+6. **Readable evidence note and Claim Traceback (1:50–2:20):** Draft the note. Show the evidence-note review view: original feedback, synthesis, individual source cards, and expandable raw Markdown. Click Claim Traceback and show source note → selected Zotero evidence → approved task → original feedback.
+7. **Trust payoff and matrix (2:20–2:40):** Mention that judge mode stops before filesystem writing, then download the Revision Response Matrix. Show comment → task → selected source IDs → grounded-note status.
 8. **GPT-5.6 build proof (2:30–2:50):** Show the primary Codex task, feedback receipt, one implementation diff, and the passing test result. State that Codex with GPT-5.6 built the submitted project; the optional runtime API adapter is separate.
 9. **Close (2:50–3:00):** “ChatGPT gives you text. ThesisOS gives you proof: every comment traceable, every citation from a paper you approved.”
 

@@ -110,7 +110,7 @@ test("judge mode uses isolated deterministic project state without mutating the 
       const projectResponse = await fetch(`${baseUrl}/api/project`);
       const project = await projectResponse.json();
       assert.equal(projectResponse.status, 200);
-      assert.equal(project.state.project.name, "ThesisOS demo thesis");
+      assert.equal(project.state.project.name, "Workplace EV charging flexibility for distribution-grid congestion management");
       assert.equal(project.readiness.ready, true);
 
       const decomposition = await fetch(`${baseUrl}/api/workflow/decompose`, {
@@ -126,6 +126,8 @@ test("judge mode uses isolated deterministic project state without mutating the 
       assert.equal(decomposition.status, 200);
       assert.equal(result.runtime.provider, "offline-fallback");
       assert.equal(result.state.feedbackThreads.length, 1);
+      assert.deepEqual(result.taskGraph.tasks.map((task) => task.tool), ["zotero", "obsidian"]);
+      assert.doesNotMatch(JSON.stringify(result.taskGraph), /overleaf/i);
     });
 
     assert.equal(await readFile(statePath, "utf8"), before);
@@ -676,21 +678,21 @@ test("serves an explicitly labelled demo library without Zotero", async () => {
 });
 
 test("searches the demo fixture through the approved workflow path", async () => {
-  const taskGraph = decomposeFeedback("Compare distributed ISAC literature.");
+  const taskGraph = decomposeFeedback("Compare smart EV charging literature.");
   taskGraph.tasks[0].approvalStatus = "approved";
 
   await withServer({}, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/workflow/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskGraph, mode: "demo", query: "distributed" })
+      body: JSON.stringify({ taskGraph, mode: "demo", query: "smart charging" })
     });
     const payload = await response.json();
 
     assert.equal(response.status, 200);
     assert.equal(payload.provider, "demo-fixture");
     assert.equal(payload.fixture, true);
-    assert.ok(payload.candidates.some((paper) => /distributed/i.test(paper.title)));
+    assert.ok(payload.candidates.some((paper) => /smart charging/i.test(paper.title)));
   });
 });
 

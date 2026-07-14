@@ -19,7 +19,7 @@ This launches a real headless Chrome session against isolated judge-mode state a
 ## Offline artifact path
 
 ```bash
-npm run demo -- --feedback "Compare distributed ISAC literature in Section 3.2" \
+npm run demo -- --feedback "Compare smart EV charging evidence for distribution-grid congestion" \
   --output-dir ./demo-output/manual-offline
 cat ./demo-output/manual-offline/task-graph.json
 cat ./demo-output/manual-offline/thesis-state.json

@@ -14,7 +14,7 @@ import { applyReviewDecisions } from "./core/review.mjs";
 import { selectEvidenceReferences } from "./core/evidence.mjs";
 import { createObsidianNotePreview, writeObsidianNote } from "./core/obsidian.mjs";
 import { createDeterministicDraft, draftEvidenceNoteWithOpenAI } from "./core/note-drafting.mjs";
-import { createDemoProjectState, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
+import { createDemoProjectState, decomposeDemoFeedback, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
 import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
 import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault } from "./core/obsidian-vault.mjs";
 import { acceptProfileProposal, answerProfileQuestions, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordFeedback, recordFeedbackTasks, recordProjectDocument, reviewCanonicalTask, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
@@ -135,6 +135,7 @@ export function createAppServer(dependencies = {}) {
   const writeNote = dependencies.writeNote ?? writeObsidianNote;
   const loadDemoLibrary = dependencies.loadDemoLibrary ?? demoLibraryPayload;
   const searchDemo = dependencies.searchDemo ?? searchDemoLibrary;
+  const decomposeDemo = dependencies.decomposeDemo ?? decomposeDemoFeedback;
   const draftOpenAI = dependencies.draftOpenAI ?? draftEvidenceNoteWithOpenAI;
   const draftCodex = dependencies.draftCodex ?? draftEvidenceNoteWithCodex;
   const draftFallback = dependencies.draftFallback ?? createDeterministicDraft;
@@ -384,7 +385,7 @@ export function createAppServer(dependencies = {}) {
         let runtimeWarning;
         let taskGraph;
         if (judgeMode) {
-          taskGraph = await decomposeOffline(feedback, context ? { context } : undefined);
+          taskGraph = await decomposeDemo(feedback, context ? { context } : undefined);
           runtimeProvider = "offline-fallback";
           runtimeWarning = "Judge mode uses deterministic task decomposition and does not call an external model.";
         } else if (provider === "codex") {
