@@ -14,7 +14,7 @@ import { applyReviewDecisions } from "./core/review.mjs";
 import { selectEvidenceReferences } from "./core/evidence.mjs";
 import { createObsidianNotePreview, writeObsidianNote } from "./core/obsidian.mjs";
 import { createDeterministicDraft, draftEvidenceNoteWithOpenAI } from "./core/note-drafting.mjs";
-import { createDemoProjectState, decomposeDemoFeedback, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
+import { createDemoGroundedDraft, createDemoProjectState, decomposeDemoFeedback, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
 import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
 import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault } from "./core/obsidian-vault.mjs";
 import { acceptProfileProposal, answerProfileQuestions, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordFeedback, recordFeedbackTasks, recordProjectDocument, reviewCanonicalTask, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
@@ -136,6 +136,7 @@ export function createAppServer(dependencies = {}) {
   const loadDemoLibrary = dependencies.loadDemoLibrary ?? demoLibraryPayload;
   const searchDemo = dependencies.searchDemo ?? searchDemoLibrary;
   const decomposeDemo = dependencies.decomposeDemo ?? decomposeDemoFeedback;
+  const draftDemo = dependencies.draftDemo ?? createDemoGroundedDraft;
   const draftOpenAI = dependencies.draftOpenAI ?? draftEvidenceNoteWithOpenAI;
   const draftCodex = dependencies.draftCodex ?? draftEvidenceNoteWithCodex;
   const draftFallback = dependencies.draftFallback ?? createDeterministicDraft;
@@ -532,7 +533,7 @@ export function createAppServer(dependencies = {}) {
         const draftInput = canonical ? { ...body, feedback: thread.feedback, evidenceRefs: selectedEvidence } : body;
         let draft;
         try {
-          if (judgeMode) draft = draftFallback(draftInput.feedback, draftInput.evidenceRefs, "Judge mode uses the deterministic grounded template and does not call an external drafting API.");
+          if (judgeMode) draft = draftDemo(draftInput.feedback, draftInput.evidenceRefs);
           else if (body.provider === "codex") draft = await draftCodex(draftInput, { model: body.model, cwd: projectDir });
           else draft = await draftOpenAI(draftInput, { model: body.model });
         } catch (error) {

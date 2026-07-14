@@ -60,6 +60,32 @@ export function decomposeDemoFeedback(feedback, options = {}) {
   };
 }
 
+const DEMO_SOURCE_NOTES = {
+  EV001: { summary: "Tariff-led smart charging can lower carbon intensity, but a tariff alone can synchronize vehicles into the same cheap period and create a local peak.", relevance: "This qualifies the thesis claim: price shifting is not the same as relieving a constrained feeder." },
+  EV002: { summary: "Some EV models cannot reliably pause or resume delayed charging, so an ideal charging schedule may not be deployable across the real vehicle fleet.", relevance: "This adds a feasibility condition: the strategy must state which vehicle-control capabilities it assumes." },
+  EV003: { summary: "The usable flexibility of a charging session depends on connection time, charging power, and whether control is unidirectional or bidirectional.", relevance: "This defines the flexibility variables the thesis must model before making a grid-benefit claim." },
+  EV004: { summary: "Cost-minimised charging can concentrate demand in low-price windows, producing cable and transformer congestion in urban low-voltage networks.", relevance: "This is direct counter-evidence to an unconditional claim that smart charging always reduces local congestion." },
+  EV005: { summary: "Observed smart-home charging shifted demand away from peak periods, improving both user cost and grid efficiency in the studied digital-platform setting.", relevance: "This is supporting evidence, but only for the platform and network conditions observed in that study." },
+  EV006: { summary: "Network-aware, real-time demand response can target congestion while respecting user preferences instead of relying on price signals alone.", relevance: "This supports the distinct network-aware control branch of the thesis argument." },
+  EV007: { summary: "Centralised V2G scheduling can reduce net-load variation, but it introduces battery-wear and forecasting trade-offs.", relevance: "This extends the comparison beyond one-way charging and keeps the trade-off visible." },
+  EV008: { summary: "Vehicle-to-grid benefits depend on control design, incentives, interoperability, and deployment barriers—not simply on battery availability.", relevance: "This frames the limitations section and prevents overclaiming deployment readiness." }
+};
+
+export function createDemoGroundedDraft(feedback, evidenceRefs) {
+  const notes = evidenceRefs.map((reference) => DEMO_SOURCE_NOTES[reference.key] ?? {
+    summary: reference.abstract || `Review the selected evidence from ${reference.title}.`,
+    relevance: "Use this source to support, qualify, or challenge the supervisor feedback."
+  });
+  return {
+    schemaVersion: 1,
+    provider: "demo-grounded-template",
+    model: "none",
+    warning: "Demo mode generates this source-by-source evidence note locally; no external model was called.",
+    overview: "The selected evidence does not support an unconditional claim that smart charging reduces congestion. It distinguishes price-led load shifting, network-aware control, and vehicle capability constraints.",
+    sourceNotes: evidenceRefs.map((reference, index) => ({ sourceId: reference.sourceId, ...notes[index] }))
+  };
+}
+
 export async function searchDemoLibrary(taskGraph, options = {}) {
   const task = requireApprovedLiteratureTask(taskGraph);
   const query = options.query?.trim() || extractLiteratureQuery(taskGraph.feedback);

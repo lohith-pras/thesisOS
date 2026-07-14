@@ -22,7 +22,7 @@ export function createClaimTraceback(state, input) {
   return {
     schemaVersion: 1,
     tracedUnit: sourceNote ? "grounded-draft-source-note" : "selected-evidence",
-    source: { sourceId, title: evidence.title?.trim() || "Untitled Zotero item", doi: evidence.doi ?? null, selectedAt: evidence.selectedAt ?? null },
+    source: { sourceId, title: evidence.title?.trim() || "Untitled Zotero item", abstract: evidence.abstract ?? null, doi: evidence.doi ?? null, selectedAt: evidence.selectedAt ?? null },
     claim: sourceNote ? { summary: sourceNote.summary, relevance: sourceNote.relevance } : null,
     feedback: { id: thread.id, title: thread.title?.trim() || "Supervisor feedback", comment: thread.feedback },
     task: { id: task.id, title: task.title, approvalStatus: task.approvalStatus, tool: task.tool ?? null },

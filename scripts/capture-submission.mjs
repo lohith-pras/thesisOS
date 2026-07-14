@@ -123,7 +123,7 @@ try {
   await evaluate(call, "document.querySelector('[data-action=\"draft-evidence-note\"]').click()");
   await waitUntil(call, "document.querySelector('.note-preview') !== null");
   await waitUntil(call, `document.querySelector('.note-preview').textContent.includes(${JSON.stringify(selectedSourceId)})`);
-  await waitUntil(call, "document.querySelector('.note-preview').textContent.includes('deterministic-template')");
+  await waitUntil(call, "document.querySelector('.note-preview').textContent.includes('demo-grounded-template')");
   await evaluate(call, "document.querySelector('.note-preview').scrollTop=document.querySelector('.note-preview').scrollHeight");
   if (!VERIFY_ONLY) {
     await screenshotElement(call, ".note-workflow", "judge-grounded-note.png");
@@ -134,7 +134,7 @@ try {
   await evaluate(call, "location.hash='notes'");
   await waitUntil(call, "document.querySelector('.note-preview') !== null");
   await waitUntil(call, `document.querySelector('.note-preview').textContent.includes(${JSON.stringify(selectedSourceId)})`);
-  await waitUntil(call, "document.querySelector('.note-preview').textContent.includes('deterministic-template')");
+  await waitUntil(call, "document.querySelector('.note-preview').textContent.includes('demo-grounded-template')");
   socket.close();
 
   if (VERIFY_ONLY) {
