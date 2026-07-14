@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { selectEvidenceReferences } from "./evidence.mjs";
 import { validateProjectState } from "./project-state.mjs";
+import { validateGroundedDraft } from "./note-drafting.mjs";
 
 function expectRevision(state, expectedRevision) {
   if (expectedRevision !== state.revision) {
@@ -47,7 +48,7 @@ export function attachCanonicalEvidence(state, input, options = {}) {
 
   const now = options.now ?? new Date().toISOString();
   const { taskGraph, selection } = selectEvidenceReferences(
-    taskGraphForThread(thread), options.searchArtifact, input.sourceIds, { now }
+    taskGraphForThread(thread), options.searchArtifact, input.sourceIds, { now, taskId: task.id }
   );
   const updatedTask = taskGraph.tasks.find((candidate) => candidate.id === task.id);
   const selectedEvidence = selection.evidenceRefs.map((reference) => ({
@@ -95,4 +96,22 @@ export function workflowReadModel(state, feedbackThreadId) {
     previewStatus: selectedEvidence.some((record) => record.preview) ? "available" : "not_started",
     nextAllowedAction
   };
+}
+
+export function recordCanonicalDraft(state, input, options = {}) {
+  validateProjectState(state);
+  expectRevision(state, input.expectedRevision);
+  const { thread, task } = requireThreadAndTask(state, input.feedbackThreadId, input.taskId);
+  const selectedEvidence = state.evidence.filter((record) => record.feedbackThreadId === thread.id && record.taskId === task.id);
+  if (!selectedEvidence.length) throw new Error("Selected evidence is required before drafting.");
+  const draft = validateGroundedDraft(input.draft, selectedEvidence);
+  const now = options.now ?? new Date().toISOString();
+  return validateProjectState({
+    ...state,
+    revision: state.revision + 1,
+    evidence: state.evidence.map((record) => record.feedbackThreadId === thread.id && record.taskId === task.id
+      ? { ...record, draft: { ...draft, provider: options.provider ?? "unknown", model: options.model ?? "default", createdAt: now } }
+      : record),
+    events: [...state.events, transitionEvent("evidence.draft.recorded", now, { feedbackThreadId: thread.id, taskId: task.id })]
+  });
 }

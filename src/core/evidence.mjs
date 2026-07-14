@@ -2,7 +2,9 @@ import { validateTaskGraph } from "./schema.mjs";
 
 export function selectEvidenceReferences(taskGraph, searchArtifact, sourceIds, options = {}) {
   validateTaskGraph(taskGraph);
-  const literatureTask = taskGraph.tasks.find((task) => task.kind === "literature");
+  const literatureTask = options.taskId
+    ? taskGraph.tasks.find((task) => task.id === options.taskId)
+    : taskGraph.tasks.find((task) => task.kind === "literature");
   if (!literatureTask || literatureTask.approvalStatus !== "approved") {
     throw new Error("An approved literature task is required before selecting evidence.");
   }

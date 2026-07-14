@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createProjectState } from "../src/core/project-state.mjs";
-import { attachCanonicalEvidence, workflowReadModel } from "../src/core/workflow.mjs";
+import { createProjectState, migrateProjectState } from "../src/core/project-state.mjs";
+import { attachCanonicalEvidence, recordCanonicalDraft, workflowReadModel } from "../src/core/workflow.mjs";
 
 function canonicalState() {
   const state = createProjectState({ project: "ISAC thesis" }, { now: "2026-07-14T00:00:00.000Z" });
@@ -70,4 +70,35 @@ test("projects the canonical workflow read model for a feedback thread", () => {
   assert.equal(workflow.feedback, "Review the literature evidence.");
   assert.equal(workflow.selectedEvidence[0].sourceId, "group:1:A");
   assert.equal(workflow.nextAllowedAction.id, "draft-evidence-note");
+});
+
+test("attaches evidence to the requested literature task when a thread has several", () => {
+  const state = canonicalState();
+  state.feedbackThreads[0].tasks.unshift({ ...state.feedbackThreads[0].tasks[0], id: "task-literature-first" });
+  const next = attachCanonicalEvidence(state, {
+    feedbackThreadId: "feedback-1", taskId: "task-literature",
+    sourceIds: ["group:1:A"], expectedRevision: state.revision
+  }, { searchArtifact });
+  assert.equal(next.feedbackThreads[0].tasks[0].evidenceRefs, undefined);
+  assert.equal(next.feedbackThreads[0].tasks[1].evidenceRefs[0].sourceId, "group:1:A");
+});
+
+test("loads schema-v3 project state saved before evidence existed", () => {
+  const legacy = createProjectState({ project: "ISAC thesis" });
+  delete legacy.evidence;
+  assert.deepEqual(migrateProjectState(legacy).evidence, []);
+});
+
+test("stores a validated draft against canonical selected evidence", () => {
+  const state = canonicalState();
+  const attached = attachCanonicalEvidence(state, {
+    feedbackThreadId: "feedback-1", taskId: "task-literature",
+    sourceIds: ["group:1:A"], expectedRevision: state.revision
+  }, { searchArtifact });
+  const next = recordCanonicalDraft(attached, {
+    feedbackThreadId: "feedback-1", taskId: "task-literature", expectedRevision: attached.revision,
+    draft: { overview: "Grounded", sourceNotes: [{ sourceId: "group:1:A", summary: "Supported", relevance: "Relevant" }] }
+  }, { provider: "codex", model: "test" });
+  assert.equal(next.evidence[0].draft.sourceNotes[0].sourceId, "group:1:A");
+  assert.equal(workflowReadModel(next, "feedback-1").draftStatus, "available");
 });

@@ -69,7 +69,7 @@ export function createProjectState({ project, thesisDir, vaultPath }, options = 
 }
 
 export function migrateProjectState(state, options = {}) {
-  if (state?.schemaVersion === 3) return validateProjectState(state);
+  if (state?.schemaVersion === 3) return validateProjectState({ ...state, evidence: state.evidence ?? [] });
   if (state?.schemaVersion !== 2) throw new Error(`Unsupported project state schema version '${state?.schemaVersion}'.`);
   const now = options.now ?? new Date().toISOString();
   return validateProjectState({
@@ -79,6 +79,7 @@ export function migrateProjectState(state, options = {}) {
     profile: { objectives: [], problems: [], deliverables: [], deadlines: [], supervisorExpectations: [], seedReferences: [] },
     profileProposal: null,
     documents: [],
+    evidence: [],
     events: [...(state.events ?? []), event("state.migrated", now, { previousVersion: 2, nextVersion: 3 })]
   });
 }
