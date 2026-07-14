@@ -780,16 +780,28 @@ test("frontend uses a quiet marker for async activity", async () => {
   assert.doesNotMatch(styles, /animation:activity-dot/);
 });
 
-test("frontend closes task modals through one reduced-motion-aware helper", async () => {
+test("frontend closes task modals with keyboard support and restores focus", async () => {
   const source = await readFile(resolve("app/app.js"), "utf8");
   const styles = await readFile(resolve("app/styles.css"), "utf8");
 
   assert.match(source, /function closeTaskModal\(\)/);
   assert.match(source, /prefers-reduced-motion: reduce/);
+  assert.match(source, /event\.key !== "Escape"/);
+  assert.match(source, /event\.key !== "Tab"/);
+  assert.match(source, /modal\.returnFocus/);
+  assert.match(source, /returnFocus\?\.isConnected/);
   assert.match(source, /closeTaskModal\(\)/);
   assert.doesNotMatch(source, /document\.querySelector\("\.modal-backdrop"\)\?\.remove\(\)/);
   assert.match(styles, /\.modal-backdrop\.is-closing/);
   assert.match(styles, /\.modal-backdrop\.is-closing \.task-modal/);
+});
+
+test("frontend selects the deterministic runtime in judge mode", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+
+  assert.match(source, /function selectedWorkflowProvider\(\) \{ return state\.connection\.mode === "demo" \? "offline"/);
+  assert.match(source, /state\.connection\.mode === "demo" \? "offline" : data\.get\("provider"\)/);
+  assert.match(source, /Building your deterministic task graph/);
 });
 
 test("frontend configures an existing or new Obsidian vault without path pasting", async () => {

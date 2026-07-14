@@ -58,6 +58,11 @@ function getTask(id) { return state.tasks.find((task) => task.id === id); }
 function statusLabel(value = "") { return value.replaceAll("_", " "); }
 function icon(name) { return ({ overview: "⌂", profile: "◎", tasks: "✓", evidence: "▤", notes: "▧", integrations: "⌘", settings: "⚙", about: "ⓘ" })[name] || "·"; }
 function button(label, action, kind = "dark", disabled = false) { return `<button class="button button-${kind}" data-action="${action}"${disabled ? " disabled" : ""}>${label}</button>`; }
+function selectedWorkflowProvider() { return state.connection.mode === "demo" ? "offline" : state.workflowProvider; }
+function workflowProviderOptions() {
+  const selected = selectedWorkflowProvider();
+  return `<option value="codex"${selected === "codex" ? " selected" : ""}>Codex CLI · local login</option><option value="offline"${selected === "offline" ? " selected" : ""}>Offline · deterministic</option><option value="openai"${selected === "openai" ? " selected" : ""}>OpenAI · GPT-5.6 API</option>`;
+}
 function eyebrow(text) { return `<p class="eyebrow"><i></i>${text}</p>`; }
 function emptyState(title, copy, action = "", label = "") { return `<section class="empty-state panel"><span class="empty-mark">◇</span><div><h2>${esc(title)}</h2><p>${esc(copy)}</p></div>${action ? button(label, action, "outline") : ""}</section>`; }
 function activityMarker() { return '<span class="activity-marker" aria-hidden="true"></span>'; }
@@ -189,7 +194,7 @@ function overview() {
   const feedbackStatus = !state.profileReadiness.ready ? `<p class="context-notice">Feedback can be saved now. Add thesis context before generating specific tasks.</p>` : `<p class="helper">Only approved thesis context and this exact feedback go to the selected runtime.</p>`;
   return `<section class="lifecycle-head"><div>${eyebrow("Guided lifecycle / overview")}<h1>${esc(canonical?.project?.name || state.project)}</h1><p><span class="status-dot"></span>${esc(stage)}${selected ? ` · Focused on ${esc(selected.name)}` : ""}</p></div><button class="button button-outline" data-view="${nextAction.view}">${esc(nextAction.label)} →</button></section>
     <section class="metric-grid"><article><b>${connected ? state.connection.paperCount : "—"}</b><span>Zotero papers</span></article><article><b>${profile.objectives?.length ?? 0}</b><span>Objectives</span></article><article><b>${openTasks}</b><span>Open tasks</span></article><article><b>${threads.length}</b><span>Feedback threads</span></article></section>
-    <section class="lifecycle-grid"><div><form class="feedback-form panel overview-feedback" id="feedback-form"><div class="panel-head"><span class="label">ADD SUPERVISOR FEEDBACK</span><span class="timestamp">Saved canonically</span></div><label for="feedback-title">Feedback title <small>optional</small></label><input id="feedback-title" name="title" value="${esc(state.feedbackTitle)}" placeholder="For example: Section 3.2 revisions" /><label for="feedback-text">Supervisor feedback</label><textarea id="feedback-text" name="feedback" rows="6" placeholder="Paste or type the exact feedback here." required>${esc(state.feedback)}</textarea><label for="workflow-provider">Task runtime</label><select id="workflow-provider" name="provider"><option value="codex"${state.workflowProvider === "codex" ? " selected" : ""}>Codex CLI · local login</option><option value="offline"${state.workflowProvider === "offline" ? " selected" : ""}>Offline · deterministic</option><option value="openai"${state.workflowProvider === "openai" ? " selected" : ""}>OpenAI · GPT-5.6 API</option></select>${feedbackStatus}${sectionActivity(["task-graph", "feedback-capture"])}${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="form-footer"><span class="read-only-note"><i></i>${state.profileReadiness.ready ? "Validated task artifact" : "Capture now · decompose later"}</span>${button(state.profileReadiness.ready ? "Turn into proposed tasks →" : "Save feedback →", "analyze-feedback", "dark", state.workflowBusy)}</div></form>${latest ? `<article class="latest-feedback panel"><div class="panel-head"><span class="label">LATEST FEEDBACK</span><span class="timestamp">${esc(statusLabel(latest.status))}</span></div><blockquote>“${esc(latest.feedback)}”</blockquote><div class="byline">${latest.tasks?.length || 0} proposed tasks <span>${latest.tasks?.length ? "Review required" : "Waiting for thesis context"}</span></div>${latest.tasks?.length ? `<button class="card-link" data-view="tasks">Review tasks <span>→</span></button>` : `<button class="card-link" data-view="profile">Add thesis context <span>→</span></button>`}</article>` : ""}</div><div>${setupPanel}<section class="integration-health"><button class="panel" data-view="integrations"><i class="${connected ? "live" : ""}"></i><span><b>Zotero</b><small>${connected ? `Connected locally · ${state.connection.paperCount} papers` : "Not connected"}</small></span><em>→</em></button><button class="panel" data-view="profile"><i class="${canonical?.project?.thesisDir ? "live" : ""}"></i><span><b>Manuscript</b><small>${canonical?.project?.thesisDir ? `Linked · ${esc(canonical.project.thesisDir)}` : "Not linked · Overleaf Git or local folder"}</small></span><em>→</em></button><button class="panel" data-view="integrations"><i class="${state.obsidianVaultPath ? "live" : ""}"></i><span><b>Obsidian</b><small>${state.obsidianVaultPath ? `Initialized · ${esc(state.obsidianVaultPath)}` : "Not initialized"}</small></span><em>→</em></button></section></div></section>`;
+    <section class="lifecycle-grid"><div><form class="feedback-form panel overview-feedback" id="feedback-form"><div class="panel-head"><span class="label">ADD SUPERVISOR FEEDBACK</span><span class="timestamp">Saved canonically</span></div><label for="feedback-title">Feedback title <small>optional</small></label><input id="feedback-title" name="title" value="${esc(state.feedbackTitle)}" placeholder="For example: Section 3.2 revisions" /><label for="feedback-text">Supervisor feedback</label><textarea id="feedback-text" name="feedback" rows="6" placeholder="Paste or type the exact feedback here." required>${esc(state.feedback)}</textarea><label for="workflow-provider">Task runtime</label><select id="workflow-provider" name="provider">${workflowProviderOptions()}</select>${feedbackStatus}${sectionActivity(["task-graph", "feedback-capture"])}${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="form-footer"><span class="read-only-note"><i></i>${state.profileReadiness.ready ? "Validated task artifact" : "Capture now · decompose later"}</span>${button(state.profileReadiness.ready ? "Turn into proposed tasks →" : "Save feedback →", "analyze-feedback", "dark", state.workflowBusy)}</div></form>${latest ? `<article class="latest-feedback panel"><div class="panel-head"><span class="label">LATEST FEEDBACK</span><span class="timestamp">${esc(statusLabel(latest.status))}</span></div><blockquote>“${esc(latest.feedback)}”</blockquote><div class="byline">${latest.tasks?.length || 0} proposed tasks <span>${latest.tasks?.length ? "Review required" : "Waiting for thesis context"}</span></div>${latest.tasks?.length ? `<button class="card-link" data-view="tasks">Review tasks <span>→</span></button>` : `<button class="card-link" data-view="profile">Add thesis context <span>→</span></button>`}</article>` : ""}</div><div>${setupPanel}<section class="integration-health"><button class="panel" data-view="integrations"><i class="${connected ? "live" : ""}"></i><span><b>Zotero</b><small>${connected ? `Connected locally · ${state.connection.paperCount} papers` : "Not connected"}</small></span><em>→</em></button><button class="panel" data-view="profile"><i class="${canonical?.project?.thesisDir ? "live" : ""}"></i><span><b>Manuscript</b><small>${canonical?.project?.thesisDir ? `Linked · ${esc(canonical.project.thesisDir)}` : "Not linked · Overleaf Git or local folder"}</small></span><em>→</em></button><button class="panel" data-view="integrations"><i class="${state.obsidianVaultPath ? "live" : ""}"></i><span><b>Obsidian</b><small>${state.obsidianVaultPath ? `Initialized · ${esc(state.obsidianVaultPath)}` : "Not initialized"}</small></span><em>→</em></button></section></div></section>`;
 }
 
 function provenanceLabel(value) {
@@ -227,7 +232,7 @@ function profile() {
 
 function feedback() {
   if (state.projectState && !state.profileReadiness.ready) return `<div class="page-intro compact">${eyebrow("Feedback / context required")}<h1>Complete the thesis profile first.</h1><p>Feedback without approved objectives and scope produces generic work. Missing: ${esc(state.profileReadiness.missing.join(", "))}.</p>${button("Complete thesis profile →", "open-profile")}</div>`;
-  return `<div class="page-intro compact">${eyebrow("Feedback / source")}<h1>Keep the original wording.</h1><p>Add a real supervisor comment. ThesisOS interprets it against the approved thesis profile and manuscript map.</p></div><section class="feedback-layout"><form class="feedback-form panel" id="feedback-form"><label for="feedback-title">Feedback title</label><input id="feedback-title" name="title" value="${esc(state.feedbackTitle)}" placeholder="For example: Section 3.2 revisions" /><label for="feedback-text">Supervisor feedback</label><textarea id="feedback-text" name="feedback" rows="8" placeholder="Paste the exact feedback here." required>${esc(state.feedback)}</textarea><label for="workflow-provider">Decomposition runtime</label><select id="workflow-provider" name="provider"><option value="codex"${state.workflowProvider === "codex" ? " selected" : ""}>Codex CLI · uses local login</option><option value="offline"${state.workflowProvider === "offline" ? " selected" : ""}>Offline · deterministic fallback</option><option value="openai"${state.workflowProvider === "openai" ? " selected" : ""}>OpenAI · GPT-5.6 API</option></select><p class="helper">Only approved thesis context and this feedback are sent to the selected runtime.</p>${sectionActivity(["task-graph"])}${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="form-footer"><span class="read-only-note"><i></i> Validated task artifact</span>${button(state.workflowBusy ? "Creating tasks…" : state.feedback ? "Update review tasks →" : "Create review tasks →", "analyze-feedback", "dark", state.workflowBusy)}</div></form><aside class="side-note"><span class="label">WHAT HAPPENS NEXT</span><ol><li><b>01</b><span>The runtime receives approved thesis context plus exact feedback.</span></li><li><b>02</b><span>The server validates the task graph and persists it canonically.</span></li><li><b>03</b><span>Every proposed task begins pending your approval.</span></li></ol></aside></section>`;
+  return `<div class="page-intro compact">${eyebrow("Feedback / source")}<h1>Keep the original wording.</h1><p>Add a real supervisor comment. ThesisOS interprets it against the approved thesis profile and manuscript map.</p></div><section class="feedback-layout"><form class="feedback-form panel" id="feedback-form"><label for="feedback-title">Feedback title</label><input id="feedback-title" name="title" value="${esc(state.feedbackTitle)}" placeholder="For example: Section 3.2 revisions" /><label for="feedback-text">Supervisor feedback</label><textarea id="feedback-text" name="feedback" rows="8" placeholder="Paste the exact feedback here." required>${esc(state.feedback)}</textarea><label for="workflow-provider">Decomposition runtime</label><select id="workflow-provider" name="provider">${workflowProviderOptions()}</select><p class="helper">Only approved thesis context and this feedback are sent to the selected runtime.</p>${sectionActivity(["task-graph"])}${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="form-footer"><span class="read-only-note"><i></i> Validated task artifact</span>${button(state.workflowBusy ? "Creating tasks…" : state.feedback ? "Update review tasks →" : "Create review tasks →", "analyze-feedback", "dark", state.workflowBusy)}</div></form><aside class="side-note"><span class="label">WHAT HAPPENS NEXT</span><ol><li><b>01</b><span>The runtime receives approved thesis context plus exact feedback.</span></li><li><b>02</b><span>The server validates the task graph and persists it canonically.</span></li><li><b>03</b><span>Every proposed task begins pending your approval.</span></li></ol></aside></section>`;
 }
 
 function taskRow(task) { return `<button class="task-row" data-task="${task.id}"><span class="task-mark ${task.approvalStatus}">${task.approvalStatus === "approved" ? "✓" : ""}</span><span class="task-copy"><strong>${esc(task.title)}</strong><small>${esc(task.tool)} · ${statusLabel(task.status)}</small></span><span class="task-state ${task.approvalStatus}">${statusLabel(task.approvalStatus)}</span><span class="arrow">→</span></button>`; }
@@ -367,14 +372,18 @@ function selectZotero(library) { return requestConnection("/api/zotero/select", 
 function closeTaskModal() {
   const modal = document.querySelector(".modal-backdrop");
   if (!modal || modal.dataset.closing === "true") return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  const returnFocus = modal.returnFocus;
+  const remove = () => {
     modal.remove();
+    if (returnFocus?.isConnected) returnFocus.focus();
+  };
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    remove();
     return;
   }
 
   modal.dataset.closing = "true";
   modal.classList.add("is-closing");
-  const remove = () => modal.remove();
   modal.addEventListener("transitionend", (event) => {
     if (event.target === modal) remove();
   }, { once: true });
@@ -384,8 +393,10 @@ function closeTaskModal() {
 function openTask(id) {
   const task = getTask(id);
   if (!task) return;
+  const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const modal = document.createElement("div");
   modal.className = "modal-backdrop";
+  modal.returnFocus = returnFocus;
   const canLaunchLiterature = task.kind === "literature" && state.connection.status === "connected";
   const modalCopy = canLaunchLiterature
     ? "Approve this read-only literature task and ThesisOS will immediately search Zotero and open the results."
@@ -396,7 +407,22 @@ function openTask(id) {
       ? button(state.workflowBusy ? "Searching…" : "Search Zotero →", "search-zotero", "dark", state.workflowBusy || state.connection.status !== "connected")
       : `<span class="muted-action">Task ${esc(task.approvalStatus)}</span>`;
   modal.innerHTML = `<section class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-title"><button class="modal-close" data-close-modal aria-label="Close">×</button><span class="label">${esc(task.kind)} task · ${esc(task.tool)}</span><h2 id="task-title">${esc(task.title)}</h2><p class="modal-copy">${modalCopy}</p>${sectionActivity(["task-review", "zotero-search"])}<div class="modal-detail"><span>Approval</span><strong class="${task.approvalStatus}">${statusLabel(task.approvalStatus)}</strong><span>Execution</span><strong>${task.kind === "literature" ? "Read-only Zotero search" : "Adapter not implemented"}</strong><span>Source</span><strong>User-provided supervisor feedback</strong></div>${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="modal-actions">${taskAction}<button class="text-button" data-close-modal>Close</button></div></section>`;
+  modal.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") return;
+    const focusable = [...modal.querySelectorAll("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")];
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
   document.body.append(modal);
+  modal.querySelector("[data-close-modal]")?.focus();
 }
 
 async function handleAction(action) {
@@ -651,6 +677,12 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-close-modal]")) closeTaskModal();
 });
 
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !document.querySelector(".modal-backdrop")) return;
+  event.preventDefault();
+  closeTaskModal();
+});
+
 document.addEventListener("dragover", (event) => {
   const zone = event.target.closest("[data-drop-zone]");
   if (!zone) return;
@@ -742,7 +774,7 @@ app.addEventListener("submit", async (event) => {
   const data = new FormData(event.target);
   state.feedbackTitle = data.get("title")?.toString().trim() || "Supervisor feedback";
   state.feedback = data.get("feedback")?.toString().trim() || "";
-  state.workflowProvider = data.get("provider")?.toString() || "codex";
+  state.workflowProvider = state.connection.mode === "demo" ? "offline" : data.get("provider")?.toString() || "codex";
   if (!state.feedback) return;
   if (state.workflowBusy) return;
   if (state.projectState && !state.profileReadiness.ready) {
@@ -759,7 +791,7 @@ app.addEventListener("submit", async (event) => {
     } catch (error) { failActivity(error); }
     return render();
   }
-  beginActivity("task-graph", "Codex CLI is building your task graph…", "Validating proposed tasks before review.");
+  beginActivity("task-graph", state.workflowProvider === "offline" ? "Building your deterministic task graph…" : "Codex CLI is building your task graph…", "Validating proposed tasks before review.");
   saveState();
   try {
     const response = await fetch("/api/workflow/decompose", {
