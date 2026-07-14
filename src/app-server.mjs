@@ -7,7 +7,7 @@ import { listZoteroPapers, searchZotero } from "./core/zotero.mjs";
 import { decomposeFeedback } from "./core/decompose.mjs";
 import { decomposeFeedbackWithCodex } from "./core/codex.mjs";
 import { draftEvidenceNoteWithCodex } from "./core/codex.mjs";
-import { DEFAULT_MODEL, decomposeFeedbackWithOpenAI } from "./core/openai.mjs";
+import { DEFAULT_MODEL, decomposeFeedbackWithModelProvider, decomposeFeedbackWithOpenAI } from "./core/openai.mjs";
 import { createThesisState } from "./core/state.mjs";
 import { validateArtifacts } from "./core/schema.mjs";
 import { applyReviewDecisions } from "./core/review.mjs";
@@ -124,6 +124,7 @@ export function createAppServer(dependencies = {}) {
   const decomposeOffline = dependencies.decomposeOffline ?? decomposeFeedback;
   const decomposeCodex = dependencies.decomposeCodex ?? decomposeFeedbackWithCodex;
   const decomposeOpenAI = dependencies.decomposeOpenAI ?? decomposeFeedbackWithOpenAI;
+  const decomposeModel = dependencies.decomposeModel ?? decomposeFeedbackWithModelProvider;
   const reviewTasks = dependencies.reviewTasks ?? applyReviewDecisions;
   const searchPapers = dependencies.searchPapers ?? searchZotero;
   const selectEvidence = dependencies.selectEvidence ?? selectEvidenceReferences;
@@ -312,8 +313,8 @@ export function createAppServer(dependencies = {}) {
         const project = typeof body.project === "string" && body.project.trim() ? body.project.trim() : "Thesis workspace";
         const provider = body.provider ?? "offline";
         if (!feedback) throw httpError(400, "Supervisor feedback is required.");
-        if (!new Set(["offline", "codex", "openai"]).has(provider)) {
-          throw httpError(400, "Decomposition provider must be 'offline', 'codex', or 'openai'.");
+        if (!new Set(["offline", "codex", "openai", "openrouter", "ollama"]).has(provider)) {
+          throw httpError(400, "Decomposition provider must be 'offline', 'codex', 'openai', 'openrouter', or 'ollama'.");
         }
 
         const canonical = await stateExists() ? await loadCanonicalState() : null;
@@ -332,7 +333,9 @@ export function createAppServer(dependencies = {}) {
           }
         } else taskGraph = provider === "openai"
           ? await decomposeOpenAI(feedback, { model: body.model, ...(context ? { context } : {}) })
-          : await decomposeOffline(feedback, context ? { context } : undefined);
+          : provider === "openrouter" || provider === "ollama"
+            ? await decomposeModel(feedback, { provider, model: body.model, ...(context ? { context } : {}) })
+            : await decomposeOffline(feedback, context ? { context } : undefined);
         if (canonical) {
           const knownObjectives = new Set(canonical.profile.objectives.map(({ id }) => id));
           const knownLocations = new Set((canonical.manuscript.chapters ?? []).map(({ id }) => id));

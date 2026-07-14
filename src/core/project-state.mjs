@@ -24,6 +24,7 @@ export function validateProjectState(state) {
   if (!Array.isArray(state.claims) || !Array.isArray(state.events)) throw new Error("Project claims and events must be arrays.");
   if (!state.profile || typeof state.profile !== "object") throw new Error("Project profile must be an object.");
   if (!Array.isArray(state.documents)) throw new Error("Project documents must be an array.");
+  if (!Array.isArray(state.evidence)) throw new Error("Project evidence must be an array.");
   const claimIds = new Set();
   for (const claim of state.claims) {
     requireText(claim.id, "Claim ID");
@@ -33,6 +34,13 @@ export function validateProjectState(state) {
     requireText(claim.locationId, `Claim '${claim.id}' location`);
     if (!CLAIM_STATUSES.has(claim.status)) throw new Error(`Invalid claim status '${claim.status}'.`);
     if (!Array.isArray(claim.sourceIds)) throw new Error(`Claim '${claim.id}' sourceIds must be an array.`);
+  }
+  for (const evidence of state.evidence) {
+    if (!evidence || typeof evidence !== "object") throw new Error("Evidence records must be objects.");
+    requireText(evidence.sourceId, "Evidence source ID");
+    if (evidence.feedbackThreadId !== undefined) requireText(evidence.feedbackThreadId, "Evidence feedback thread ID");
+    if (evidence.taskId !== undefined) requireText(evidence.taskId, "Evidence task ID");
+    if (evidence.selectedAt !== undefined) requireText(evidence.selectedAt, "Evidence selected time");
   }
   return state;
 }
@@ -61,7 +69,7 @@ export function createProjectState({ project, thesisDir, vaultPath }, options = 
 }
 
 export function migrateProjectState(state, options = {}) {
-  if (state?.schemaVersion === 3) return validateProjectState(state);
+  if (state?.schemaVersion === 3) return validateProjectState({ ...state, evidence: state.evidence ?? [] });
   if (state?.schemaVersion !== 2) throw new Error(`Unsupported project state schema version '${state?.schemaVersion}'.`);
   const now = options.now ?? new Date().toISOString();
   return validateProjectState({
@@ -71,6 +79,7 @@ export function migrateProjectState(state, options = {}) {
     profile: { objectives: [], problems: [], deliverables: [], deadlines: [], supervisorExpectations: [], seedReferences: [] },
     profileProposal: null,
     documents: [],
+    evidence: [],
     events: [...(state.events ?? []), event("state.migrated", now, { previousVersion: 2, nextVersion: 3 })]
   });
 }
