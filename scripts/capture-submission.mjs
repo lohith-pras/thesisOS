@@ -110,6 +110,7 @@ try {
   await waitUntil(call, "document.querySelector('[data-action=\"search-zotero\"]') !== null");
   await evaluate(call, "document.querySelector('[data-action=\"search-zotero\"]').click()");
   await waitUntil(call, "document.querySelector('.retrieval-notice') !== null");
+  await waitUntil(call, "document.querySelector('.modal-backdrop') === null");
   if (!VERIFY_ONLY) {
     await screenshot(call, "judge-retrieval.png");
     console.log("Captured retrieval");
