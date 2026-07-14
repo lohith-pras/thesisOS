@@ -1,13 +1,57 @@
-Reviewer feedback is usually written like this: strengthen the literature review, compare an approach, or revise a manuscript section. It rarely repeats the exact title of a paper. Proofline turns that ordinary feedback into a reviewable, evidence-backed research trail.
+PROOFLINE — 90-SECOND DEMO SCRIPT
 
-I built Proofline with Codex. Codex helped shape the local-first architecture, implement and debug the Zotero connector, design the semantic retrieval evaluation, close the approval-gated evidence loop, and generate the automated judge-mode capture you are seeing. The main Codex build session is included in the submission.
+Before recording
+- Run: npm run app -- --demo
+- Open: http://127.0.0.1:4173
+- Use one browser window at 100% zoom; silence notifications.
+- Start on Overview with the DEMO SESSION badge visible.
+- Keep the Codex feedback receipt and `npm test` result ready in separate tabs.
 
-The workflow starts by preserving the supervisor's original wording. Codex CLI can decompose messy feedback into a validated task graph using the user's local Codex login, so basic use does not require API credits. Every proposed task begins pending. A rejected literature task cannot search the library. Approval authorizes only the read-only search; it does not authorize a note or filesystem write.
+0:00–0:10 — The problem
+Screen: Overview. Keep the demo badge and empty review trail visible.
+Say: “Reviewer feedback names a problem, not the paper that proves it.”
+Say: “Proofline turns that comment into an evidence trail the researcher can inspect.”
 
-For retrieval, Proofline connects to personal or group Zotero libraries through the local read-only API. It indexes titles, authors, venues, abstracts, Zotero tags, and DOI. Local Ollama embeddings provide semantic similarity, while metadata matching supplies an explainable second signal. The interface reports its retrieval mode, relevance threshold, abstract coverage, and why each result matched. Unchanged paper embeddings are cached locally. On five reviewer-style evaluation queries against a real forty-paper group library, the baseline reaches point eight three recall at five and a mean reciprocal rank of one.
+0:10–0:18 — The promise
+Screen: Point to the demo guide and the Write boundary language.
+Say: “It is local-first: Zotero stays read-only, and nothing writes without explicit approval.”
 
-The researcher then selects the papers that truly count as evidence. Only those stable Zotero source IDs move forward to the dedicated Evidence notes step. Codex CLI drafts the grounded literature note through the authenticated local session. Before processing, the user sees and approves the boundary. Codex returns strict structured output, and every citation must match a selected source ID. Unknown citations are rejected. If Codex is unavailable, Proofline visibly falls back to a deterministic grounded template; GPT-5.6 remains an optional API adapter.
+0:18–0:23 — Set up the wow moment
+Screen: Click “Show completed proof.” Pause while the Evidence notes view loads.
+Say: “For judges, this deterministic replay opens the complete, approval-gated path in one click.”
 
-The final note is always previewed. In judge mode, Proofline stops here and cannot write to the filesystem. In the full local workflow, writing to an Obsidian vault requires a separate approval and existing files are never overwritten.
+0:23–0:38 — Claim Traceback (primary wow moment)
+Screen: Hold on Claim Traceback. Slowly reveal its four steps.
+Pause: 2 seconds before speaking.
+Say: “This is the proof: one draft statement, its selected paper, approved task, and original feedback.”
+Say: “Every link is drawn from canonical local state—not a generated story.”
 
-Proofline is designed for researchers who need help moving research forward without giving up judgment, provenance, or control. The agent does the organizing and retrieval work. The researcher decides what counts as evidence and what is allowed to change.
+0:38–0:49 — Grounded note
+Screen: Show the grounded note preview and the stable source ID.
+Say: “The note only uses papers the researcher selected as evidence.”
+Say: “Judge mode previews this result, but cannot write to the filesystem.”
+
+0:49–1:01 — Boundary proof
+Screen: Click “Test citation boundary.” Hold on the green rejection confirmation.
+Pause: 2 seconds after the confirmation appears.
+Say: “Now I inject an unselected citation. Proofline refuses it before preview.”
+Say: “That boundary is enforced, demonstrated, and covered by tests.”
+
+1:01–1:12 — Review trail
+Screen: Return to Overview and open the Revision Response Matrix.
+Say: “The response matrix gives a supervisor the same trail: comment, task, evidence, and note status.”
+
+1:12–1:22 — Build proof
+Screen: Show the Codex feedback receipt, then the passing `npm test` terminal result.
+Say: “Codex with GPT-5.6 built the submitted project. Runtime model choice stays separate and visible.”
+
+1:22–1:30 — Close
+Screen: Return to Claim Traceback.
+Say: “Chat tools generate text. Proofline generates proof: every citation comes from evidence you approved.”
+
+Recording checklist
+- The “DEMO SESSION · ISOLATED DATA” label is visible at least once.
+- Claim Traceback appears before the halfway point.
+- The citation-rejection confirmation is readable and held for two seconds.
+- Do not claim that the demo writes to Obsidian; it deliberately cannot.
+- Export or show the response matrix only after explaining it is read-only.

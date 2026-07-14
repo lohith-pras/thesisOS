@@ -4,7 +4,7 @@ Research feedback says, “Section 3.2 needs stronger evidence.” Proofline tur
 
 If a generated draft cites a source ID you did not select, Proofline rejects it.
 
-![Proofline judge-mode workflow](docs/assets/thesisos-hero.gif)
+![Proofline judge-mode proof: grounded note, Claim Traceback, and citation rejection](docs/assets/thesisos-hero.gif)
 
 ```bash
 npm install
