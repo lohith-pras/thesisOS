@@ -13,3 +13,5 @@ demo-output/
 !.agents/skills/evidence-note-writing/**
 skills-lock.json
 .thesisos-cache/
+.thesisos/thesis-state.json
+videos/
