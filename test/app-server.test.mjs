@@ -103,6 +103,36 @@ test("judge mode can restart its isolated demo state", async () => {
   });
 });
 
+test("judge mode can open a completed, traceable proof replay without a filesystem write", async () => {
+  await withServer({ judgeMode: true }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/demo/proof`, { method: "POST" });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.connection.mode, "demo");
+    assert.equal(payload.workflow.tasks.find(({ id }) => id === "task-literature").approvalStatus, "approved");
+    assert.ok(payload.workflow.selectedEvidence.length >= 1);
+    assert.ok(payload.workflow.draft);
+    assert.equal(payload.claimTraceback.feedback.id, payload.proof.feedbackThreadId);
+    assert.equal(payload.claimTraceback.source.sourceId, payload.proof.sourceId);
+  });
+});
+
+test("canonical mutation endpoints explain when an expected revision is missing", async () => {
+  await withServer({ judgeMode: true }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/workflow/decompose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback: "Clarify the grid-congestion framing.", provider: "offline" })
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.equal(payload.code, "REVISION_REQUIRED");
+    assert.match(payload.message, /expectedRevision from GET \/api\/project/);
+  });
+});
+
 test("exports a read-only revision response matrix from canonical state", async () => {
   await withServer({ judgeMode: true }, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/revision-response-matrix`);
@@ -610,7 +640,7 @@ test("previews an evidence-linked Obsidian note without writing a file", async (
     const payload = await response.json();
 
     assert.equal(response.status, 200);
-    assert.match(payload.markdown, /# Literature evidence — ISAC thesis/);
+    assert.match(payload.markdown, /# Literature evidence — Compare the paper/);
     assert.match(payload.markdown, /group:6568124:ABC123/);
     assert.match(payload.markdown, /https:\/\/doi\.org\/10\.1000\/isac/);
     assert.equal(payload.writeApproved, false);
@@ -673,7 +703,7 @@ test("writes an Obsidian note only with explicit approval", async () => {
 
       assert.equal(response.status, 201);
       assert.equal(artifact.writeApproved, true);
-      assert.match(artifact.path, /ThesisOS\/Evidence\/literature-evidence-isac-thesis\.md$/);
+      assert.match(artifact.path, /10_Literature_Notes\/literature-evidence--.+--[a-f0-9]{10}\.md$/);
       assert.equal(await readFile(artifact.path, "utf8"), preview.markdown);
     });
   } finally {
@@ -730,7 +760,8 @@ test("frontend copy contains no fictitious project, researcher, feedback, or pap
   assert.match(source, /Connect Zotero Desktop/);
   assert.match(source, /Open Zotero and try again/);
   assert.match(source, /Choose a library/);
-  assert.match(source, /Zotero Cloud/);
+  assert.doesNotMatch(source, /Zotero Cloud/);
+  assert.match(source, /Zotero remains read-only/);
 });
 
 test("frontend submits feedback to the validated workflow API instead of creating placeholder tasks", async () => {
@@ -844,7 +875,7 @@ test("frontend configures an existing or new Obsidian vault without path pasting
   assert.match(source, /\/api\/obsidian\/pick/);
   assert.match(source, /Choose existing vault/);
   assert.match(source, /Create new vault/);
-  assert.match(source, /ThesisOS remembers your choice for this project/);
+  assert.match(source, /Proofline remembers your choice for this project/);
 });
 
 test("full library exposes the next literature action instead of presenting inert cards as selectable", async () => {
@@ -904,6 +935,15 @@ test("frontend provides a state-aware guide only for the demo workflow", async (
   assert.match(source, /\/api\/demo\/restart/);
   assert.match(source, /demoGuideHidden/);
   assert.match(source, /seed-demo-feedback/);
+  assert.match(source, /show-demo-proof/);
+  assert.match(source, /test-demo-rejection/);
+  assert.match(source, /fixture:demo:UNSELECTED/);
+});
+
+test("workspace launching avoids the Windows command shell", async () => {
+  const server = await readFile(resolve("src/app-server.mjs"), "utf8");
+  assert.doesNotMatch(server, /command = "cmd"/);
+  assert.match(server, /command = application === "Visual Studio Code" \? "code" : "obsidian"/);
 });
 
 test("frontend releases approval activity before handing off to the automatic literature search", async () => {
@@ -928,7 +968,7 @@ test("frontend implements profile onboarding before feedback", async () => {
   assert.match(source, /\/api\/project\/profile\/propose/);
   assert.match(source, /\/api\/project\/profile\/review/);
   assert.match(source, /\/api\/project\/profile\/answers/);
-  assert.match(source, /Set up your thesis profile/);
+  assert.match(source, /Set up your research brief/);
   assert.match(source, /profile-form/);
   assert.match(source, /expectedRevision/);
   assert.match(source, /Optional manuscript folder/);
@@ -937,14 +977,14 @@ test("frontend implements profile onboarding before feedback", async () => {
 
 test("frontend implements the approved guided lifecycle", async () => {
   const source = await readFile(resolve(process.cwd(), "app", "app.js"), "utf8");
-  assert.match(source, /Set up my thesis/);
-  assert.match(source, /Only the thesis name is required/);
+  assert.match(source, /Set up my research/);
+  assert.match(source, /Only a project name is required/);
   assert.match(source, /Skip for now/);
-  assert.match(source, /Add supervisor feedback/);
+  assert.match(source, /Add reviewer feedback/);
   assert.match(source, /Setup · .*configured/);
   assert.match(source, /aria-expanded/);
   assert.match(source, /\/api\/project\/feedback/);
-  assert.match(source, /About ThesisOS/);
+  assert.match(source, /About Proofline/);
   assert.doesNotMatch(source, /\["feedback", "Feedback"\]/);
   assert.doesNotMatch(source, /Overleaf connected/i);
 });

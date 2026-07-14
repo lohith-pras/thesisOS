@@ -59,7 +59,7 @@ export async function loadZoteroSelection(projectDir = process.cwd()) {
     return config.zotero?.library ?? null;
   } catch (error) {
     if (error.code === "ENOENT") return null;
-    if (error instanceof SyntaxError) throw new Error(`Invalid ThesisOS project configuration: ${error.message}`);
+    if (error instanceof SyntaxError) throw new Error(`Invalid Proofline project configuration: ${error.message}`);
     throw error;
   }
 }

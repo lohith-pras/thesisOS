@@ -1,10 +1,10 @@
 # CLI reference
 
-ThesisOS exposes small Node.js CLIs for offline artifacts, review decisions, Zotero access, and retrieval evaluation.
+Proofline exposes small Node.js CLIs for offline artifacts, review decisions, Zotero access, and retrieval evaluation.
 
 ## Canonical revision workspace
 
-Initialize persistent state from an existing local thesis checkout. The optional sources file is a JSON array of Zotero records and may mark reviewed records with `"selected": true`:
+Initialize persistent state from an existing local research checkout. The optional sources file is a JSON array of Zotero records and may mark reviewed records with `"selected": true`:
 
 ```bash
 npm run workspace -- init \

@@ -1,18 +1,18 @@
 # Zotero integration
 
-ThesisOS uses Zotero Desktop’s local API in read-only mode. It never imports, edits, deletes, or reorganizes Zotero items.
+Proofline uses Zotero Desktop’s local API in read-only mode. It never imports, edits, deletes, or reorganizes Zotero items.
 
 ## Desktop setup
 
 1. Open Zotero Desktop.
 2. Enable **Settings → Advanced → Allow other applications on this computer to communicate with Zotero**.
-3. Start ThesisOS with `npm run app`.
+3. Start Proofline with `npm run app`.
 
 The app discovers personal and group libraries and loads top-level bibliographic items. Notes, attachments, and annotations are excluded.
 
 ## Library selection
 
-ThesisOS automatically selects a library when exactly one non-empty library is available. If multiple libraries contain papers, it shows a catalog instead of guessing.
+Proofline automatically selects a library when exactly one non-empty library is available. If multiple libraries contain papers, it shows a catalog instead of guessing.
 
 Select one library from the CLI:
 
@@ -27,7 +27,7 @@ Use explicit group selection for scripts:
 npm run zotero -- --list --library-type group --library-id 6568124
 ```
 
-The selected library is persisted in the project’s `.thesisos.json` and reused on later runs.
+The selected library is persisted in the legacy-compatible project file `.thesisos.json` and reused on later runs.
 
 ## Multiple libraries
 

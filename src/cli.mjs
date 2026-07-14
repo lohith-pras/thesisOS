@@ -52,7 +52,7 @@ export function parseCliArgs(args) {
 export async function main(args = process.argv.slice(2)) {
   const options = parseCliArgs(args);
   if (options.help) {
-    console.log(`Usage: npm run demo -- [options]\n\nOptions:\n  --feedback <text>       Use feedback provided on the command line\n  --feedback-file <path>  Read feedback from a text file\n  --project <name>        Set the thesis project name\n  --output-dir <path>     Write artifacts to this directory\n  --ai                    Use the OpenAI API instead of the offline fallback\n  --codex                 Use the authenticated local Codex CLI\n  --model <id>            Override the selected AI or Codex model\n  -h, --help              Show this help`);
+  console.log(`Usage: npm run demo -- [options]\n\nOptions:\n  --feedback <text>       Use feedback provided on the command line\n  --feedback-file <path>  Read feedback from a text file\n  --project <name>        Set the research project name\n  --output-dir <path>     Write artifacts to this directory\n  --ai                    Use the OpenAI API instead of the offline fallback\n  --codex                 Use the authenticated local Codex CLI\n  --model <id>            Override the selected AI or Codex model\n  -h, --help              Show this help`);
     return;
   }
 
@@ -72,7 +72,7 @@ export async function main(args = process.argv.slice(2)) {
   await writeFile(resolve(options.outputDir, "task-graph.json"), `${JSON.stringify(taskGraph, null, 2)}\n`);
   await writeFile(resolve(options.outputDir, "thesis-state.json"), `${JSON.stringify(state, null, 2)}\n`);
 
-  console.log("ThesisOS demo complete");
+  console.log("Proofline demo complete");
   console.log(`Feedback decomposed into ${taskGraph.tasks.length} linked tasks.`);
   console.log(`Next action: ${taskGraph.nextAction}`);
   console.log(`Outputs: ${options.outputDir}`);

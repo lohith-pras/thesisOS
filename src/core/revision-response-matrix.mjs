@@ -17,7 +17,7 @@ export function createRevisionResponseMatrix(state) {
   const markdown = [
     `# Revision Response Matrix — ${state.project.name}`,
     "",
-    "Generated from ThesisOS's canonical approval and evidence trail. It records what the researcher approved; it does not claim manuscript changes that ThesisOS cannot verify.",
+    "Generated from Proofline's canonical approval and evidence trail. It records what the researcher approved; it does not claim manuscript changes that Proofline cannot verify.",
     "",
     "| Supervisor comment | Proposed task | Status | Approved evidence | Grounded note |",
     "| --- | --- | --- | --- | --- |",

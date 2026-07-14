@@ -1,9 +1,9 @@
 {
-  "name": "thesisos",
+  "name": "proofline",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A local-first thesis agent that turns supervisor feedback into an evidence-backed change set.",
+  "description": "A local-first research workspace that turns reviewer feedback into an evidence-backed change set.",
   "scripts": {
     "demo": "node src/cli.mjs",
     "review": "node src/review-cli.mjs",

@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Turn supervisor feedback into reviewed evidence and citation-checked thesis notes." />
-    <title>ThesisOS — Evidence Before AI Writing</title>
+    <meta name="description" content="Turn reviewer feedback into reviewed evidence and citation-checked research notes." />
+    <title>Proofline — Research That Shows Its Work</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="site-shell">
       <nav class="nav" aria-label="Primary navigation">
-        <a class="wordmark" href="#top" aria-label="ThesisOS home">ThesisOS<span class="wordmark-dot">.</span></a>
+        <a class="wordmark" href="#top" aria-label="Proofline home">Proofline<span class="wordmark-dot">.</span></a>
         <div class="nav-links">
           <a href="#how-it-works">How it works</a>
           <a href="#safety">Safety</a>
@@ -23,7 +23,7 @@
         <div class="hero-copy">
           <p class="eyebrow"><span class="status-dot"></span> Local-first research assistant</p>
           <h1>Evidence before<br />AI writing.</h1>
-          <p class="hero-lede">Turn supervisor feedback into reviewed Zotero evidence and a grounded thesis note whose citations must match sources you selected.</p>
+          <p class="hero-lede">Turn reviewer feedback into reviewed Zotero evidence and a grounded research note whose citations must match sources you selected.</p>
           <div class="hero-actions">
             <a class="button button-dark" href="../app/index.html#feedback">Start with feedback <span aria-hidden="true">→</span></a>
             <a class="text-link" href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a>
@@ -31,52 +31,35 @@
           <div class="hero-note"><span class="note-mark">⌁</span> Read-only by default. Your data stays on your machine.</div>
         </div>
 
-        <div class="hero-visual" id="workspace" aria-label="Preview of the ThesisOS research desk">
-          <div class="preview-topline">
-            <span>Research desk</span>
-            <span class="connection"><span class="status-dot"></span> Zotero Desktop · local-first</span>
-          </div>
-          <div class="preview-grid">
-            <aside class="preview-rail">
-              <div class="rail-title">Connection boundary</div>
-              <blockquote>“Read the library without changing it.”</blockquote>
-              <div class="rail-meta">Local API <span>No account required</span></div>
-              <div class="rail-divider"></div>
-              <div class="rail-title">Connection flow <span class="count">03</span></div>
-              <div class="task task-active"><span class="task-check">01</span><span>Connect Zotero Desktop</span></div>
-              <div class="task"><span class="task-check">02</span><span>Choose a personal or group library</span></div>
-              <div class="task"><span class="task-check">03</span><span>Review bibliographic metadata</span></div>
-              <div class="storage"><span class="storage-icon">◉</span><span>Access mode<br /><strong>Local · Read-only</strong></span></div>
-            </aside>
-            <div class="preview-main">
-              <div class="preview-kicker">Connections / 01</div>
-              <h2>Connect locally.</h2>
-              <div class="search-line"><span class="search-icon">⌕</span><span>localhost:23119</span><span class="search-action">Check Zotero Desktop <b>→</b></span></div>
-              <p class="approved-line"><span class="shield">◇</span> No Zotero password or API key requested</p>
-              <div class="result-layout">
-                <div class="molecule" aria-hidden="true">
-                  <span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="orb orb-d"></span><span class="orb orb-e"></span>
-                  <i class="bond bond-a"></i><i class="bond bond-b"></i><i class="bond bond-c"></i><i class="bond bond-d"></i>
-                </div>
-                <article class="paper-card">
-                  <div class="paper-type">Zotero Desktop <span>LOCAL</span></div>
-                  <h3>Discover the libraries already available on this machine.</h3>
-                  <p class="authors">PERSONAL LIBRARIES · GROUP LIBRARIES</p>
-                  <p class="publication">Automatic selection when one library contains papers</p>
-                  <div class="paper-rule"></div>
-                  <p class="doi"><span>ACCESS</span> Top-level bibliographic metadata only</p>
-                  <div class="paper-footer"><span>Attachments and notes excluded</span><span class="review-button">Open workspace&nbsp; →</span></div>
-                </article>
-              </div>
-            </div>
-          </div>
-          <div class="preview-footer"><span>THESISOS&nbsp;&nbsp; v1.0.0</span><span>PAGE 01</span></div>
-        </div>
+        <section class="evidence-board" id="workspace" aria-label="The Proofline evidence workflow">
+          <a class="board-cell board-feedback" href="../app/index.html#feedback">
+            <span class="board-label">01 / Original feedback</span>
+            <blockquote>“Clarify the feasibility assumptions before you make this claim.”</blockquote>
+            <span class="board-footer">The original wording stays intact <b aria-hidden="true">→</b></span>
+          </a>
+          <a class="board-cell board-review" href="../app/index.html#tasks">
+            <span class="board-label">02 / Reviewable work</span>
+            <span class="board-title">Turn one comment into bounded work.</span>
+            <ol class="board-steps"><li><b>01</b> Propose a task</li><li><b>02</b> Approve the boundary</li><li><b>03</b> Search read-only evidence</li></ol>
+          </a>
+          <a class="board-cell board-evidence" href="../app/index.html#evidence">
+            <span class="board-label">03 / Selected evidence</span>
+            <span class="board-title">Sources you chose—never invented citations.</span>
+            <span class="source-stub"><i aria-hidden="true">01</i><span><b>Local library metadata</b><small>Reviewed before use</small></span></span>
+            <span class="source-stub"><i aria-hidden="true">02</i><span><b>Stable Zotero source IDs</b><small>Traceable in the note</small></span></span>
+          </a>
+          <a class="board-cell board-note" href="../app/index.html#notes">
+            <span class="board-label">04 / Grounded note</span>
+            <span class="board-title">Write only after evidence review.</span>
+            <p>Every note carries its source trail back to the supervisor comment.</p>
+            <span class="board-seal">Review before write</span>
+          </a>
+        </section>
       </section>
 
       <section class="flow" id="how-it-works">
-        <div class="flow-heading"><span class="section-index">01</span><h2>From feedback<br />to evidence.</h2></div>
-        <div class="flow-copy"><p>ThesisOS keeps the messy middle visible. Your supervisor’s note becomes an approved task, a local search, and a candidate set you can inspect before you decide what happens next.</p><a class="text-link" href="#safety">Read the safety model <span aria-hidden="true">→</span></a></div>
+        <div class="flow-heading"><span class="section-index">THE PROOF RAIL</span><h2>From feedback<br />to evidence.</h2></div>
+        <div class="flow-copy"><p>Proofline keeps the messy middle visible. A reviewer’s note becomes approved work, a local search, and an evidence-backed note you can inspect before anything is written.</p><ol class="proof-rail"><li><a href="../app/index.html#feedback"><b>01</b> Capture the exact comment <span>→</span></a></li><li><a href="../app/index.html#tasks"><b>02</b> Review the task boundary <span>→</span></a></li><li><a href="../app/index.html#evidence"><b>03</b> Select the evidence <span>→</span></a></li><li><a href="../app/index.html#notes"><b>04</b> Inspect the grounded note <span>→</span></a></li></ol></div>
       </section>
 
       <section class="safety" id="safety">
@@ -84,7 +67,7 @@
         <div class="safety-list"><div><span>01</span><p><strong>Local-first</strong><br />Your working context stays on your machine.</p></div><div><span>02</span><p><strong>Approved-task-only</strong><br />No adapter runs without an explicit decision.</p></div><div><span>03</span><p><strong>Read-only by default</strong><br />Search first. Write later, only when you ask.</p></div></div>
       </section>
 
-      <footer class="footer"><span>ThesisOS</span><span>Research without the black box.</span><a href="#top">Back to top ↑</a></footer>
+      <footer class="footer"><span>Proofline</span><span>Research that shows its work.</span><a href="#top">Back to top ↑</a></footer>
     </main>
   </body>
 </html>

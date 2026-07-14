@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, isAbsolute, resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
+import { createHash } from "node:crypto";
 import { compactEvidenceText, validateGroundedDraft } from "./note-drafting.mjs";
 
 function requireText(value, label) {
@@ -13,6 +14,15 @@ function slugify(value) {
 
 function yamlString(value) {
   return JSON.stringify(String(value));
+}
+
+function noteIdentity(feedback) {
+  return createHash("sha256").update(String(feedback).trim()).digest("hex").slice(0, 10);
+}
+
+function feedbackLabel(feedback) {
+  const words = String(feedback).replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  return words.slice(0, 9).join(" ").replace(/[,:;.]$/, "") || "research feedback";
 }
 
 export function createEvidenceNoteReadModel({ project, feedback, evidenceRefs, draft }, preview) {
@@ -43,8 +53,9 @@ export function createObsidianNotePreview({ project, feedback, evidenceRefs, dra
   const sourceFeedback = requireText(feedback, "Supervisor feedback");
   if (!Array.isArray(evidenceRefs) || evidenceRefs.length === 0) throw new Error("At least one evidence reference is required.");
   const groundedDraft = draft ? validateGroundedDraft(draft, evidenceRefs) : null;
-  const title = `Literature evidence — ${projectName}`;
-  const filename = `${slugify(title)}.md`;
+  const identity = noteIdentity(sourceFeedback);
+  const title = `Literature evidence — ${feedbackLabel(sourceFeedback)}`;
+  const filename = `literature-evidence--${slugify(feedbackLabel(sourceFeedback)).slice(0, 72)}--${identity}.md`;
   const createdAt = options.now ?? new Date().toISOString();
   const sources = evidenceRefs.map((reference, index) => {
     const sourceId = requireText(reference.sourceId, `Evidence ${index + 1} source ID`);
@@ -54,7 +65,7 @@ export function createObsidianNotePreview({ project, feedback, evidenceRefs, dra
     return `## ${index + 1}. ${paperTitle}\n\n- Authors: ${authors}\n- Year: ${reference.year ?? "Not recorded"}\n- Zotero source ID: \`${sourceId}\`\n- Zotero item key: \`${reference.key ?? "Not recorded"}\`\n- Library: ${reference.library?.name ?? reference.library?.id ?? "Not recorded"}\n- DOI: ${reference.doi ? `[${reference.doi}](https://doi.org/${reference.doi})` : "Not recorded"}\n- Source link: ${primaryLink ? `[Open source](${primaryLink})` : "Not recorded"}\n\n### Researcher review\n\n- Claim:\n- Method:\n- Limitation:\n- Relevance to feedback:\n`;
   }).join("\n");
   const synthesis = groundedDraft ? `## Grounded synthesis\n\n${groundedDraft.overview}\n\n${groundedDraft.sourceNotes.map((note) => `### [${note.sourceId}]\n\n${note.summary}\n\n**Relevance:** ${note.relevance}`).join("\n\n")}\n\n> Draft provider: ${groundedDraft.provider}${groundedDraft.model && groundedDraft.model !== "none" ? ` · ${groundedDraft.model}` : ""}. Verify every statement before thesis use.\n\n` : "";
-  const markdown = `---\ntitle: ${yamlString(title)}\nproject: ${yamlString(projectName)}\ncreated: ${yamlString(createdAt)}\nsource_count: ${evidenceRefs.length}\nmanaged_by: thesisos\ntags:\n  - thesisos\n  - literature-evidence\n---\n\n# ${title}\n\n## Supervisor feedback\n\n> ${sourceFeedback.replaceAll("\n", "\n> ")}\n\n${synthesis}## Evidence sources\n\n${sources}`;
+  const markdown = `---\ntitle: ${yamlString(title)}\nproject: ${yamlString(projectName)}\ncreated: ${yamlString(createdAt)}\nnote_identity: ${yamlString(identity)}\nsource_count: ${evidenceRefs.length}\nmanaged_by: proofline\ntags:\n  - proofline\n  - literature-evidence\n---\n\n# ${title}\n\n## Supervisor feedback\n\n> ${sourceFeedback.replaceAll("\n", "\n> ")}\n\n${synthesis}## Evidence sources\n\n${sources}`;
 
   const preview = { schemaVersion: 1, title, filename, createdAt, sourceCount: evidenceRefs.length, markdown, writeApproved: false };
   return { ...preview, readModel: createEvidenceNoteReadModel({ project: projectName, feedback: sourceFeedback, evidenceRefs, draft: groundedDraft }, preview) };
@@ -67,8 +78,8 @@ export async function writeObsidianNote(preview, { vaultPath, approved, mkdirImp
   const filename = requireText(preview?.filename, "Note filename");
   requireText(preview?.markdown, "Note Markdown");
   const markdown = preview.markdown;
-  if (filename !== `${slugify(preview.title)}.md`) throw new Error("Note filename does not match the preview title.");
-  const directory = basename(root).toLowerCase() === "thesisos" ? resolve(root, "Evidence") : resolve(root, "ThesisOS", "Evidence");
+  if (!filename.startsWith("literature-evidence--") || !filename.endsWith(".md")) throw new Error("Note filename does not match the preview format.");
+  const directory = resolve(root, "10_Literature_Notes");
   const path = resolve(directory, filename);
   await mkdirImpl(directory, { recursive: true });
   try {
@@ -77,7 +88,7 @@ export async function writeObsidianNote(preview, { vaultPath, approved, mkdirImp
     if (error.code === "EEXIST") {
       let existing;
       try { existing = await readFileImpl(path, "utf8"); } catch { existing = ""; }
-      if (!existing.includes("managed_by: thesisos")) throw new Error(`An unmanaged Obsidian note already exists at '${path}'. Choose a different project name.`);
+      if (!existing.includes("managed_by: proofline") && !existing.includes("managed_by: thesisos")) throw new Error(`An unmanaged Obsidian note already exists at '${path}'. Choose a different feedback note.`);
       await writeFileImpl(path, markdown, { encoding: "utf8", flag: "w" });
       return { schemaVersion: 1, adapter: "obsidian-markdown", path, filename, writtenAt: new Date().toISOString(), writeApproved: true, updated: true };
     }

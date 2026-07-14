@@ -5,6 +5,11 @@ import { validateProjectState } from "./project-state.mjs";
 import { validateGroundedDraft } from "./note-drafting.mjs";
 
 function expectRevision(state, expectedRevision) {
+  if (expectedRevision === undefined || expectedRevision === null) {
+    const error = new Error("REVISION_REQUIRED: include expectedRevision from GET /api/project before changing this workspace.");
+    error.code = "REVISION_REQUIRED";
+    throw error;
+  }
   if (expectedRevision !== state.revision) {
     const error = new Error(`STATE_STALE: expected revision ${expectedRevision}, current revision is ${state.revision}.`);
     error.code = "STATE_STALE";

@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { spawn } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -14,9 +15,9 @@ import { applyReviewDecisions } from "./core/review.mjs";
 import { selectEvidenceReferences } from "./core/evidence.mjs";
 import { createObsidianNotePreview, writeObsidianNote } from "./core/obsidian.mjs";
 import { createDeterministicDraft, draftEvidenceNoteWithOpenAI } from "./core/note-drafting.mjs";
-import { createDemoGroundedDraft, createDemoProjectState, decomposeDemoFeedback, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
+import { createDemoGroundedDraft, createDemoProjectState, DEMO_FEEDBACK_OPTIONS, decomposeDemoFeedback, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
 import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
-import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault } from "./core/obsidian-vault.mjs";
+import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault, pickFolder } from "./core/obsidian-vault.mjs";
 import { acceptProfileProposal, answerProfileQuestions, consolidateFeedbackThreads, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordProjectDocument, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
 import { scanThesisCheckout } from "./core/thesis-scan.mjs";
 import { extractProjectDocument } from "./core/project-document.mjs";
@@ -81,6 +82,43 @@ function connectionError(error) {
       ...(error.libraries ? { libraries: error.libraries } : {})
     }
   };
+}
+
+function openLocalApp(application, path) {
+  return new Promise((resolveOpen, rejectOpen) => {
+    let command;
+    let args;
+    if (process.platform === "darwin") {
+      command = "open";
+      args = application === "Obsidian" ? [`obsidian://open?path=${encodeURIComponent(path)}`] : ["-a", application, path];
+    } else if (process.platform === "win32") {
+      // Do not route a user-selected path through cmd.exe: shell metacharacters in
+      // a folder name must remain data, never become a second command.
+      command = application === "Visual Studio Code" ? "code" : "obsidian";
+      args = application === "Obsidian" ? [`obsidian://open?path=${encodeURIComponent(path)}`] : [path];
+    } else {
+      command = application === "Visual Studio Code" ? "code" : "obsidian";
+      args = [path];
+    }
+    const child = spawn(command, args, { stdio: "ignore" });
+    child.once("error", (error) => rejectOpen(new Error(`Could not open ${application}: ${error.message}`)));
+    child.once("close", (code) => code === 0
+      ? resolveOpen()
+      : rejectOpen(new Error(`Could not open ${application}.`)));
+  });
+}
+
+function openExternalUrl(url) {
+  return new Promise((resolveOpen, rejectOpen) => {
+    const [command, args] = process.platform === "darwin"
+      ? ["open", [url]]
+      : process.platform === "win32"
+        ? ["cmd", ["/c", "start", "", url]]
+        : ["xdg-open", [url]];
+    const child = spawn(command, args, { stdio: "ignore" });
+    child.once("error", (error) => rejectOpen(new Error(`Could not open Overleaf: ${error.message}`)));
+    child.once("close", (code) => code === 0 ? resolveOpen() : rejectOpen(new Error("Could not open Overleaf.")));
+  });
 }
 
 async function readJsonBody(request, maxSize = MAX_REQUEST_BODY_SIZE) {
@@ -150,6 +188,9 @@ export function createAppServer(dependencies = {}) {
   const createCard = dependencies.createPaperCard ?? createPaperCard;
   const buildPaperMap = dependencies.paperMap ?? paperMap;
   const auditVault = dependencies.auditVault ?? auditObsidianVault;
+  const launchWorkspaceApp = dependencies.launchWorkspaceApp ?? openLocalApp;
+  const launchExternalUrl = dependencies.launchExternalUrl ?? openExternalUrl;
+  const pickWorkspaceFolder = dependencies.pickWorkspaceFolder ?? pickFolder;
   const canonicalStatePath = resolve(projectDir, ".thesisos", "thesis-state.json");
   const runtime = createWorkflowRuntime({
     judgeMode,
@@ -207,18 +248,18 @@ export function createAppServer(dependencies = {}) {
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/workflow") {
-        if (!await stateExists()) throw httpError(409, "Create a thesis workspace before opening feedback history.");
+        if (!await stateExists()) throw httpError(409, "Create a research workspace before opening feedback history.");
         try { sendJson(response, 200, await revisionWorkflow.read(url.searchParams.get("feedbackThreadId"))); }
         catch (error) { throw httpError(error.code === "NOT_FOUND" ? 404 : 400, error.message); }
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/revision-response-matrix") {
-        if (!await stateExists()) throw httpError(409, "Create a thesis workspace before exporting a revision response matrix.");
+        if (!await stateExists()) throw httpError(409, "Create a research workspace before exporting a revision response matrix.");
         sendJson(response, 200, createRevisionResponseMatrix(await loadCanonicalState()));
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/workflow/claim-traceback") {
-        if (!await stateExists()) throw httpError(409, "Create a thesis workspace before tracing a grounded source note.");
+        if (!await stateExists()) throw httpError(409, "Create a research workspace before tracing a grounded source note.");
         const feedbackThreadId = url.searchParams.get("feedbackThreadId");
         const sourceId = url.searchParams.get("sourceId");
         if (!feedbackThreadId || !sourceId) throw httpError(400, "Feedback thread ID and source ID are required.");
@@ -260,7 +301,18 @@ export function createAppServer(dependencies = {}) {
         const body = await readJsonBody(request);
         const thesisDir = typeof body.thesisDir === "string" && body.thesisDir.trim() ? resolve(body.thesisDir) : body.thesisDir === null ? null : undefined;
         const vaultPath = typeof body.vaultPath === "string" && body.vaultPath.trim() ? resolve(body.vaultPath) : body.vaultPath === null ? null : undefined;
-        let state = updateProjectPaths(await loadCanonicalState(), { thesisDir, vaultPath, expectedRevision: body.expectedRevision });
+        let overleafUrl;
+        if (body.overleafUrl !== undefined) {
+          if (body.overleafUrl === null || !String(body.overleafUrl).trim()) overleafUrl = null;
+          else {
+            try {
+              const url = new URL(String(body.overleafUrl).trim());
+              if (url.protocol !== "https:" || !/(^|\.)overleaf\.com$/i.test(url.hostname)) throw new Error();
+              overleafUrl = url.toString();
+            } catch { throw httpError(400, "Use a valid https://www.overleaf.com project URL."); }
+          }
+        }
+        let state = updateProjectPaths(await loadCanonicalState(), { thesisDir, vaultPath, overleafUrl, expectedRevision: body.expectedRevision });
         if (thesisDir) {
           const scan = await scanThesisCheckout(thesisDir);
           state = updateProjectScan(state, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] });
@@ -355,6 +407,30 @@ export function createAppServer(dependencies = {}) {
         sendJson(response, 200, { state, readiness: profileReadiness(state), connection: runtime.library() });
         return;
       }
+      if (request.method === "POST" && url.pathname === "/api/demo/proof") {
+        if (!runtime.capabilities.restartDemo) throw httpError(403, "The completed proof replay is only available in judge mode.");
+        let state = await runtime.restart();
+        const feedback = DEMO_FEEDBACK_OPTIONS[0];
+        const captured = await revisionWorkflow.capture({ title: feedback.title, feedback: feedback.text, expectedRevision: state.revision });
+        state = captured.state;
+        const feedbackThreadId = captured.feedbackThread.id;
+        const context = buildThesisContext(state, "decomposition", { feedback: feedback.text, placement: captured.feedbackThread.placement });
+        const taskGraph = await runtime.decompose(feedback.text, { context });
+        const persisted = await revisionWorkflow.persistTaskGraph({ feedback: feedback.text, title: feedback.title, taskGraph, context, feedbackThreadId, expectedRevision: state.revision });
+        state = persisted.state;
+        const approved = await revisionWorkflow.reviewTask({ feedbackThreadId, taskId: "task-literature", decision: "approved", expectedRevision: state.revision });
+        state = approved.state;
+        const searchArtifact = await runtime.search(approved.workflow.taskGraph, { query: context.query });
+        const sourceIds = searchArtifact.candidates.slice(0, 3).map(({ sourceId }) => sourceId);
+        const attached = await revisionWorkflow.attachEvidence({ feedbackThreadId, taskId: "task-literature", expectedRevision: state.revision, searchArtifact, sourceIds });
+        state = attached.state;
+        const draft = await runtime.draft(feedback.text, attached.workflow.selectedEvidence);
+        const drafted = await revisionWorkflow.recordDraft({ feedbackThreadId, taskId: "task-literature", expectedRevision: state.revision, draft }, { provider: draft.provider, model: draft.model });
+        state = drafted.state;
+        const sourceId = drafted.workflow.selectedEvidence[0].sourceId;
+        sendJson(response, 200, { state, readiness: profileReadiness(state), connection: runtime.library(), workflow: drafted.workflow, claimTraceback: createClaimTraceback(state, { feedbackThreadId, sourceId }), proof: { feedbackThreadId, sourceId } });
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/obsidian/status") {
         const vaultPath = await loadConfiguredVaultRoot();
         sendJson(response, 200, { configured: Boolean(vaultPath), ...(vaultPath ? { vault: await inspectObsidianVault(vaultPath) } : {}) });
@@ -389,8 +465,51 @@ export function createAppServer(dependencies = {}) {
           const current = await loadCanonicalState();
           const state = updateProjectPaths(current, { vaultPath: vault.path, expectedRevision: current.revision });
           await persistCanonicalState(state);
+          sendJson(response, 200, { configured: true, vault, state, readiness: profileReadiness(state) });
+          return;
         }
         sendJson(response, 200, { configured: true, vault });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/workspace/pick") {
+        const body = await readJsonBody(request);
+        if (body.tool !== "vscode") throw httpError(400, "Only a VS Code folder can be selected here.");
+        if (!new Set(["existing", "create"]).has(body.mode ?? "existing")) throw httpError(400, "Workspace folder mode must be 'existing' or 'create'.");
+        const mode = body.mode ?? "existing";
+        let thesisDir = await pickWorkspaceFolder(mode === "create" ? "code-create" : "vscode");
+        if (mode === "create") {
+          const name = typeof body.name === "string" ? body.name.trim() : "";
+          if (!/^[a-zA-Z0-9][a-zA-Z0-9._ -]{0,100}$/.test(name)) throw httpError(400, "Use a short folder name containing letters, numbers, spaces, dots, dashes, or underscores.");
+          thesisDir = resolve(thesisDir, name);
+          try { await mkdir(thesisDir); }
+          catch (error) { if (error.code === "EEXIST") throw httpError(409, "A folder with that name already exists. Choose another name."); throw error; }
+          await writeFile(resolve(thesisDir, "README.md"), `# ${name}\n\nCreated by Proofline as a local code workspace.\n`, { encoding: "utf8", flag: "wx" });
+        }
+        const current = await loadCanonicalState();
+        let state = updateProjectPaths(current, { thesisDir, expectedRevision: current.revision });
+        const scan = await scanThesisCheckout(thesisDir);
+        state = updateProjectScan(state, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] });
+        await persistCanonicalState(state);
+        sendJson(response, 200, { state, readiness: profileReadiness(state), path: thesisDir });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/workspace/open") {
+        if (runtime.kind === "judge") throw httpError(403, "Demo mode cannot open local applications.");
+        const body = await readJsonBody(request);
+        if (!new Set(["obsidian", "vscode", "overleaf"]).has(body.tool)) throw httpError(400, "Only Obsidian, VS Code, and Overleaf can be opened from a task.");
+        const state = await loadCanonicalState();
+        if (body.tool === "overleaf") {
+          if (!state.project.overleafUrl) throw httpError(409, "Add an Overleaf project URL before opening Overleaf.");
+          await launchExternalUrl(state.project.overleafUrl);
+          sendJson(response, 200, { opened: true, tool: "overleaf", application: "Overleaf", path: state.project.overleafUrl });
+          return;
+        }
+        const path = body.tool === "obsidian" ? state.project.vaultPath : state.project.thesisDir;
+        if (!path) throw httpError(409, body.tool === "obsidian" ? "Choose an Obsidian vault before opening Obsidian." : "Link a manuscript folder before opening VS Code.");
+        try { await access(path); } catch { throw httpError(409, `The configured ${body.tool === "obsidian" ? "Obsidian vault" : "manuscript folder"} is no longer available.`); }
+        const application = body.tool === "obsidian" ? "Obsidian" : "Visual Studio Code";
+        await launchWorkspaceApp(application, path);
+        sendJson(response, 200, { opened: true, tool: body.tool, application, path });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/zotero/select") {
@@ -407,7 +526,7 @@ export function createAppServer(dependencies = {}) {
       if (request.method === "POST" && url.pathname === "/api/workflow/decompose") {
         const body = await readJsonBody(request);
         const feedback = typeof body.feedback === "string" ? body.feedback.trim() : "";
-        const project = typeof body.project === "string" && body.project.trim() ? body.project.trim() : "Thesis workspace";
+        const project = typeof body.project === "string" && body.project.trim() ? body.project.trim() : "Research workspace";
         const provider = body.provider ?? "offline";
         if (!feedback) throw httpError(400, "Supervisor feedback is required.");
         if (!new Set(["offline", "codex", "openai", "openrouter", "ollama"]).has(provider)) {
@@ -601,6 +720,10 @@ export function createAppServer(dependencies = {}) {
       }
       await serveApp(url.pathname, response);
     } catch (error) {
+      if (error.code === "REVISION_REQUIRED") {
+        sendJson(response, 400, { status: "invalid_request", code: error.code, message: error.message });
+        return;
+      }
       if (error.code === "PROFILE_INCOMPLETE" || error.code === "STATE_STALE") {
         sendJson(response, 409, { status: "conflict", code: error.code, message: error.message, ...(error.missing ? { missing: error.missing } : {}) });
         return;
@@ -624,7 +747,7 @@ export function startAppServer(options = {}) {
   const port = options.port ?? Number(process.env.THESISOS_PORT ?? 4173);
   const server = createAppServer({ ...options.dependencies, judgeMode: options.judgeMode ?? options.dependencies?.judgeMode });
   server.listen(port, host, () => {
-    console.log(`ThesisOS workspace: http://${host}:${port}`);
+    console.log(`Proofline workspace: http://${host}:${port}`);
     console.log("Zotero access: local, read-only, no API key required");
     if (options.judgeMode) console.log("Judge mode: demo library active; no Zotero or Ollama required");
   });

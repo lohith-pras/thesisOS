@@ -1,8 +1,8 @@
-# ThesisOS design system
+# Proofline design system
 
 ## Design read
 
-ThesisOS is a local-first research workflow for thesis writers and supervisors. Its visual language is editorial, scientific, and quietly technical: a strong Swiss grid, generous white space, black ink typography, hairline rules, and one controlled green accent.
+Proofline is a local-first research workflow for researchers and reviewers. Its visual language is editorial, scientific, and quietly technical: a strong Swiss grid, generous white space, black ink typography, hairline rules, and one controlled green accent.
 
 The product should feel like a research desk rather than an AI chatbot or generic SaaS dashboard. The interface gives the user a clear path from feedback to approved task to evidence, with read-only states made visible at every important boundary.
 
@@ -89,7 +89,7 @@ Candidate literature shows, in order: item type, title, creators, year/publicati
 
 Primary labels should be short: `Start research`, `Review candidates`, `Approve task`, `Export JSON`.
 
-Use a single primary CTA per context. Any action that could write to Zotero, notes, thesis text, or Git must announce the write boundary and require an explicit second approval.
+Use a single primary CTA per context. Any action that could write to Zotero, notes, manuscript text, or Git must announce the write boundary and require an explicit second approval.
 
 ## Zotero connection user flow
 
@@ -97,7 +97,7 @@ The website implements the local-first decision from ADR 0001 as a visible conne
 
 The primary action is labeled `Connect Zotero Desktop` so local access is never confused with account authorization.
 
-1. On workspace load, show `Checking Zotero Desktop` while the local ThesisOS server calls the Zotero API on `localhost:23119`.
+1. On workspace load, show `Checking Zotero Desktop` while the local Proofline server calls the Zotero API on `localhost:23119`.
 2. If the API responds and exactly one library contains papers, show `Zotero connected · local`, the selected library name, exact bibliographic paper count, and the `Read-only` boundary.
 3. If the connector returns `selection_required`, show `Choose a library` and list every non-empty personal or group library with its type, ID, and paper count. Selecting one saves the choice for this project and reloads its papers.
 4. If Zotero cannot be reached, show `Open Zotero and try again`, explain how to enable local API access, and preserve a retry action. Never display a connected state based on cached frontend data.
@@ -105,7 +105,7 @@ The primary action is labeled `Connect Zotero Desktop` so local access is never 
 6. A future `Connect Zotero Cloud` control is shown as unavailable rather than simulated. When implemented, it redirects to Zotero OAuth and returns through the same library-choice flow.
 7. If Zotero is unavailable, offer `Use demo library` as a secondary, opt-in action. The connection header, library name, and source IDs must all say `demo` or `fixture`; the app must never silently fall back to it.
 
-ThesisOS never asks for a user's Zotero password. Local connection requires no API key. Manual Web API keys remain an advanced CLI/self-hosting option, not website onboarding.
+Proofline never asks for a user's Zotero password. Local connection requires no API key. Manual Web API keys remain an advanced CLI/self-hosting option, not website onboarding.
 
 ### Connection states
 
@@ -118,17 +118,17 @@ ThesisOS never asks for a user's Zotero password. Local connection requires no A
 ## Evidence-to-note user flow
 
 1. Feedback is submitted to the chosen offline, Codex CLI, or OpenAI runtime through the local app server.
-2. The server validates both the task graph and thesis state before the browser displays tasks.
+2. The server validates both the task graph and project state before the browser displays tasks.
 3. Approving a literature task updates both validated artifacts; approval does not itself perform a write.
 4. The approved task may run a read-only search against the selected Zotero library or the explicitly selected demo fixture.
-5. The user selects reviewed candidates. ThesisOS attaches structured `evidenceRefs` containing source ID, item key, library, title, creators, year, DOI, and URL.
+5. The user selects reviewed candidates. Proofline attaches structured `evidenceRefs` containing source ID, item key, library, title, creators, year, DOI, and URL.
 6. Obsidian note generation first returns a preview. Bibliographic metadata is rendered as fact; claim, method, limitation, and relevance remain blank researcher-review fields.
-7. The user provides an absolute vault path and separately chooses `Approve and write note`. The adapter creates a Markdown file under `ThesisOS/Literature` and refuses to overwrite an existing file.
+7. The user provides an absolute vault path and separately chooses `Approve and write note`. The adapter creates a Markdown file under the managed evidence directory and refuses to overwrite an existing file.
 
 ## Landing page structure
 
 1. Navigation with wordmark, three low-noise links, and one `Open workspace` action.
-2. Hero with the promise: `The source of truth for your thesis.`
+2. Hero with the promise: `Research that shows its work.`
 3. Product preview showing the research desk, local connection, approved task, and candidate paper.
 4. A short explanatory section for the feedback → task → evidence flow.
 5. Feature sections using varied compositions: one full-width statement, one asymmetric split, one artifact preview.
@@ -167,5 +167,5 @@ The hero itself contains only an eyebrow, headline, subtext, and two actions. Tr
 
 Precise, calm, and slightly editorial. Prefer concrete verbs: `Find`, `Review`, `Trace`, `Approve`, `Keep`. Avoid hype, anthropomorphism, and claims that suggest autonomous writing or library changes.
 
-Good: “The source of truth for your thesis.”  
-Avoid: “Let AI take over your entire thesis.”
+Good: “Research that shows its work.”
+Avoid: “Let AI take over your entire research project.”
