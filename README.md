@@ -1,10 +1,10 @@
-# ThesisOS
+# Proofline
 
-Your supervisor says, “Section 3.2 needs stronger evidence.” ThesisOS turns that comment into reviewed papers from your Zotero library and a grounded thesis note whose citations must match sources you selected.
+Research feedback says, “Section 3.2 needs stronger evidence.” Proofline turns that comment into reviewed papers from your Zotero library and a grounded research note whose citations must match sources you selected.
 
-If a generated draft cites a source ID you did not select, ThesisOS rejects it.
+If a generated draft cites a source ID you did not select, Proofline rejects it.
 
-![ThesisOS judge-mode workflow](docs/assets/thesisos-hero.gif)
+![Proofline judge-mode proof: grounded note, Claim Traceback, and citation rejection](docs/assets/thesisos-hero.gif)
 
 ```bash
 npm install
@@ -14,9 +14,9 @@ npm run app -- --demo
 ## Working vertical slice
 
 ```text
-supervisor feedback
+reviewer feedback
   → Codex CLI task graph
-  → researcher approves literature task
+  → researcher approves an evidence task
   → read-only Zotero search
   → researcher selects evidence
   → Codex CLI grounded draft
@@ -27,11 +27,11 @@ supervisor feedback
 
 The researcher remains the decision-maker: rejected tasks cannot run, only selected source IDs can enter drafting, and filesystem writes are separate approvals.
 
-After a workflow runs, ThesisOS can export a **Revision Response Matrix**: a supervisor-readable Markdown table of each comment, proposed task, researcher decision, selected Zotero sources, and grounded-note status. It reports only the approval and evidence trail ThesisOS can verify; it never claims an unverified manuscript change.
+After a workflow runs, Proofline can export a **Revision Response Matrix**: a reviewer-readable Markdown table of each comment, proposed task, researcher decision, selected Zotero sources, and grounded-note status. It reports only the approval and evidence trail Proofline can verify; it never claims an unverified manuscript change.
 
-**Claim Traceback** lets the researcher select a grounded source note and inspect its selected Zotero record, approved task, original supervisor feedback, and response-matrix status. It traces only source-backed draft notes—not arbitrary manuscript sentences that ThesisOS has not verified.
+**Claim Traceback** lets the researcher select a grounded source note and inspect its selected Zotero record, approved task, original reviewer feedback, and response-matrix status. It traces only source-backed draft notes—not arbitrary manuscript sentences that Proofline has not verified.
 
-ThesisOS can also maintain `.thesisos/thesis-state.json` as the canonical record of links between feedback, manuscript citations, selected evidence, model-proposed claims, and researcher approvals. Zotero and the local thesis checkout remain authoritative for their native data; generated Obsidian views are deterministic and regenerable. See the [canonical workspace commands](docs/cli.md#canonical-revision-workspace).
+Proofline maintains the legacy-compatible `.thesisos/thesis-state.json` as the canonical record of links between feedback, manuscript citations, selected evidence, model-proposed claims, and researcher approvals. Zotero and the local research checkout remain authoritative for their native data; generated Obsidian views are deterministic and regenerable. See the [canonical workspace commands](docs/cli.md#canonical-revision-workspace).
 
 ## Quick start
 
@@ -42,9 +42,9 @@ npm install
 npm run app -- --demo
 ```
 
-Open [http://127.0.0.1:4173](http://127.0.0.1:4173). Demo mode uses a clearly labelled fixture library, falls back safely when Codex is unavailable, and never writes to the filesystem.
+Open [http://127.0.0.1:4173](http://127.0.0.1:4173). Demo mode uses a clearly labelled fixture library, falls back safely when Codex is unavailable, and never writes to the filesystem. For the fastest judge walkthrough, choose **Show completed proof**: it replays the same approval-gated fixture transitions and opens Claim Traceback at the completed evidence trail. Choose **Test citation boundary** to watch a draft containing an unselected source ID be refused before preview.
 
-For a real project, choose **Set up my thesis** and enter a name. Every other step is optional: import a PDF/Markdown/text project description, connect Zotero, link a local or Overleaf Git manuscript folder, initialize an Obsidian vault, and record the selected scope or stage. Feedback can be captured immediately; task decomposition remains locked until the minimum profile is approved so generated work always has thesis context.
+For a real project, choose **Set up my research** and enter a name. Every other step is optional: import a PDF/Markdown/text project description, connect Zotero, link a local or Overleaf Git manuscript folder, initialize an Obsidian vault, and record the selected scope or stage. Feedback can be captured immediately; task decomposition remains locked until the minimum brief is approved so generated work always has project context.
 
 For the real local workflow, keep Zotero Desktop running and use:
 
@@ -54,7 +54,7 @@ npm run app
 
 The live path uses the read-only Zotero Desktop API and your authenticated Codex CLI session. Check authentication with `codex login status`.
 
-ThesisOS runs on macOS, Windows, and Linux with Node.js 22+. The optional submission-media helpers (`npm run render:video` and `npm run capture:submission`) are macOS development scripts: they use macOS `say`, the default macOS Chrome path, and external `ffmpeg`/ImageMagick tooling.
+Proofline runs on macOS, Windows, and Linux with Node.js 22+. The optional submission-media helpers (`npm run render:video` and `npm run capture:submission`) are macOS development scripts: they use macOS `say`, the default macOS Chrome path, and external `ffmpeg`/ImageMagick tooling.
 
 ## Website walkthrough
 
@@ -69,13 +69,14 @@ ThesisOS runs on macOS, Windows, and Linux with Node.js 22+. The optional submis
 
 ## How Codex and GPT-5.6 are used
 
-ThesisOS was built with Codex using GPT-5.6; the verified build and feedback ID is `019f5cc1-08be-7071-a5ea-220a8de0f313` ([feedback receipt](docs/assets/codex-feedback-receipt.png)). At runtime, users can choose Codex CLI, the optional OpenAI adapter, or a labelled deterministic fallback.
+Proofline was built with Codex using GPT-5.6; the verified build and feedback ID is `019f5cc1-08be-7071-a5ea-220a8de0f313` ([feedback receipt](docs/assets/codex-feedback-receipt.png)). At runtime, users can choose Codex CLI, the optional OpenAI adapter, or a labelled deterministic fallback.
 
 Build-time GPT-5.6 usage and runtime model selection are separate. The detailed implementation record and model boundaries are documented in the [submission notes](docs/devpost-submission.md).
 
-## Why you can use it on a real thesis
+## Why you can use it on real research
 
-- **Search boundary:** ThesisOS reads Zotero metadata but cannot alter the library.
+- **Search boundary:** Proofline reads Zotero metadata but cannot alter the library.
+- **Measured retrieval:** the included five-query fixture reports recall@5 of **0.83** and mean reciprocal rank of **1.0**; it is a small regression check, not a general performance claim.
 - **Evidence boundary:** drafting receives only reviewed evidence, and drafts containing unselected source IDs are rejected.
 - **Write boundary:** notes are previewed before a separate filesystem approval; judge mode cannot write at all.
 - **Revision boundary:** response-matrix exports are read-only views of the canonical approval and evidence trail.

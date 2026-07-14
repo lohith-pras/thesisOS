@@ -15,7 +15,7 @@ const defaultState = {
   onboardingStep: 0,
   setupCollapsed: false,
   activeProfileForm: null,
-  project: "Thesis workspace",
+  project: "Research workspace",
   projectState: null,
   profileReadiness: { ready: false, missing: [] },
   feedback: "",
@@ -42,6 +42,7 @@ const defaultState = {
   seedReferenceReport: null,
   noteWrite: null,
   responseMatrix: null,
+  demoRejectionProof: null,
   demoGuideHidden: false,
   obsidianVaultPath: "",
   papers: [],
@@ -177,25 +178,26 @@ function demoGuide() {
     { view: "notes", title: "Choose whether to save", copy: "A vault write always needs a separate approval." }
   ];
   const active = steps[step];
-  return `<aside class="demo-guide panel" aria-label="Demo steps"><div class="demo-guide-head"><span class="label">DEMO STEPS · ${completed.filter(Boolean)} OF 5</span><span><button class="text-button" data-action="restart-demo">Restart</button><button class="text-button" data-action="hide-demo-guide">Hide</button></span></div><div class="demo-guide-current"><i>${completed[step] ? "✓" : String(step + 1)}</i><div><strong>${esc(active.title)}</strong><p>${esc(active.copy)}</p></div>${step < 4 ? button(`Continue →`, `demo-guide-step:${active.view}`, "outline", state.workflowBusy) : ""}</div><ol aria-label="All demo steps">${steps.map((item, index) => `<li class="${completed[index] ? "complete" : index === step ? "active" : ""}"><i>${completed[index] ? "✓" : String(index + 1)}</i><span>${esc(item.title)}</span></li>`).join("")}</ol></aside>`;
+  const proofStatus = state.demoRejectionProof ? `<p class="demo-proof-status">✓ ${esc(state.demoRejectionProof)}</p>` : "";
+  return `<aside class="demo-guide panel" aria-label="Demo steps"><div class="demo-guide-head"><span class="label">DEMO STEPS · ${completed.filter(Boolean)} OF 5</span><span><button class="text-button" data-action="restart-demo">Restart</button><button class="text-button" data-action="hide-demo-guide">Hide</button></span></div><div class="demo-guide-current"><i>${completed[step] ? "✓" : String(step + 1)}</i><div><strong>${esc(active.title)}</strong><p>${esc(active.copy)}</p></div>${step < 4 ? button(`Continue →`, `demo-guide-step:${active.view}`, "outline", state.workflowBusy) : ""}</div><div class="demo-guide-actions">${button("Show completed proof", "show-demo-proof", "dark", state.workflowBusy)}${state.notePreview ? button("Test citation boundary", "test-demo-rejection", "outline", state.workflowBusy) : ""}</div>${proofStatus}<ol aria-label="All demo steps">${steps.map((item, index) => `<li class="${completed[index] ? "complete" : index === step ? "active" : ""}"><i>${completed[index] ? "✓" : String(index + 1)}</i><span>${esc(item.title)}</span></li>`).join("")}</ol></aside>`;
 }
 
 function shell(content) {
-  const nav = [["overview", "Overview"], ["profile", "Thesis profile"], ["feedback", "Supervisor review"], ["tasks", "Tasks"], ["evidence", "Library"], ["notes", "Evidence notes"], ["integrations", "Connections"]];
+  const nav = [["overview", "Overview"], ["profile", "Research brief"], ["feedback", "Reviewer feedback"], ["tasks", "Tasks"], ["evidence", "Library"], ["notes", "Evidence notes"], ["integrations", "Connections"]];
   const pending = state.tasks.filter((task) => task.approvalStatus === "pending").length;
   const connected = state.connection.status === "connected";
   return `<aside class="sidebar">
-    <button class="brand brand-home" data-view="overview" aria-label="Go to Overview">ThesisOS<span>.</span></button>
+    <button class="brand brand-home" data-view="overview" aria-label="Go to Overview">Proofline<span>.</span></button>
     <div class="brand-subtitle">LOCAL-FIRST RESEARCH WORKSPACE</div>
     <div class="sidebar-rule"></div>
     <nav class="main-nav" aria-label="Workspace navigation">${nav.map(([id, label]) => `<button class="nav-item ${state.view === id ? "active" : ""}" data-view="${id}"><span class="nav-glyph">${icon(id)}</span>${label}${id === "tasks" && pending ? `<b class="nav-count">${pending}</b>` : ""}</button>`).join("")}</nav>
     <div class="sidebar-rule"></div>
     <div class="sidebar-block"><span class="label">CURRENT PROJECT</span><strong>${esc(state.project)}</strong><span class="project-status"><i></i> Stored on this machine</span></div>
-    <div class="sidebar-bottom"><button class="nav-item ${state.view === "settings" ? "active" : ""}" data-view="settings"><span class="nav-glyph">${icon("settings")}</span>Settings</button><button class="nav-item ${state.view === "about" ? "active" : ""}" data-view="about"><span class="nav-glyph">${icon("about")}</span>About ThesisOS</button></div>
+    <div class="sidebar-bottom"><button class="nav-item ${state.view === "settings" ? "active" : ""}" data-view="settings"><span class="nav-glyph">${icon("settings")}</span>Settings</button><button class="nav-item ${state.view === "about" ? "active" : ""}" data-view="about"><span class="nav-glyph">${icon("about")}</span>About Proofline</button></div>
   </aside><main class="main-content"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span><b>/</b><strong>${esc(pageTitle())}</strong></div><div class="topbar-actions">${state.connection.mode === "demo" ? `<span class="runtime-badge">DEMO SESSION · ISOLATED DATA</span>` : ""}<button class="connection connection-button ${connected ? "connected" : state.connection.status}" data-view="integrations"><i></i>${esc(connectionLabel())}</button></div></header>${activityStrip()}<div class="page-content">${demoGuide()}${content}${state.view === "overview" ? responseMatrixPanel() : ""}</div></main>`;
 }
 
-function pageTitle() { return ({ overview: "Overview", profile: "Thesis profile", feedback: "Supervisor review", tasks: "Task review", evidence: "Zotero library", notes: "Evidence notes", integrations: "Connections", settings: "Settings", about: "About ThesisOS" })[state.view] || "Overview"; }
+function pageTitle() { return ({ overview: "Overview", profile: "Research brief", feedback: "Reviewer feedback", tasks: "Task review", evidence: "Zotero library", notes: "Evidence notes", integrations: "Connections", settings: "Settings", about: "About Proofline" })[state.view] || "Overview"; }
 
 function legacyResponseMatrixPanel() {
   const count = state.projectState?.feedbackThreads?.length ?? 0;
@@ -230,22 +232,22 @@ function responseMatrixPanel() {
 }
 
 function landing() {
-  return `<main class="first-run"><header class="first-run-nav"><a class="brand" href="/">ThesisOS<span>.</span></a><span>Local-first · reviewable by design</span></header><section class="first-run-hero"><div>${eyebrow("A guided lifecycle for thesis work")}<h1>Know what<br>comes next.</h1><p>ThesisOS reads the intent behind your thesis, keeps supervisor feedback intact, and turns it into evidence-backed work you approve.</p><div class="intro-actions">${button("Set up my thesis →", "start-onboarding")} ${button("Explore with demo data", "use-demo-library", "outline")}</div><small>Only the thesis name is required. Every connection can be added later.</small></div><aside class="outcome-preview"><span class="label">THE OUTCOME</span><ol><li><b>01</b><span>Establish what the thesis is trying to prove.</span></li><li><b>02</b><span>Capture feedback in the supervisor's own words.</span></li><li><b>03</b><span>Approve tasks and attach evidence from Zotero.</span></li></ol><p>Nothing writes to your thesis or vault without approval.</p></aside></section></main>`;
+  return `<main class="first-run"><header class="first-run-nav"><a class="brand" href="/">Proofline<span>.</span></a><span>Local-first · reviewable by design</span></header><section class="first-run-hero"><div>${eyebrow("A guided lifecycle for research work")}<h1>Know what<br>comes next.</h1><p>Proofline reads your research intent, keeps reviewer feedback intact, and turns it into evidence-backed work you approve.</p><div class="intro-actions">${button("Set up my research →", "start-onboarding")} ${button("Explore with demo data", "use-demo-library", "outline")}</div><small>Only a project name is required. Every connection can be added later.</small></div><aside class="outcome-preview"><span class="label">THE OUTCOME</span><ol><li><b>01</b><span>Establish what the research is trying to prove.</span></li><li><b>02</b><span>Capture feedback in the reviewer’s own words.</span></li><li><b>03</b><span>Approve tasks and attach evidence from Zotero.</span></li></ol><p>Nothing writes to your project or vault without approval.</p></aside></section></main>`;
 }
 
 function onboardingFrame(content, step, options = {}) {
   const progress = `${Math.max(1, step)} of 7`;
-  return `<main class="onboarding-shell"><header class="first-run-nav"><a class="brand" href="/">ThesisOS<span>.</span></a><span>Setup · ${progress}</span></header><section class="onboarding-card"><div class="onboarding-progress" aria-label="Onboarding progress">${Array.from({ length: 7 }, (_, index) => `<i class="${index < step ? "complete" : ""}"></i>`).join("")}</div>${content}${options.optional ? `<button class="text-button onboarding-skip" data-action="onboarding-next:${step + 1}">Skip for now →</button>` : ""}</section></main>`;
+  return `<main class="onboarding-shell"><header class="first-run-nav"><a class="brand" href="/">Proofline<span>.</span></a><span>Setup · ${progress}</span></header><section class="onboarding-card"><div class="onboarding-progress" aria-label="Onboarding progress">${Array.from({ length: 7 }, (_, index) => `<i class="${index < step ? "complete" : ""}"></i>`).join("")}</div>${content}${options.optional ? `<button class="text-button onboarding-skip" data-action="onboarding-next:${step + 1}">Skip for now →</button>` : ""}</section></main>`;
 }
 
 function onboarding() {
   const step = Math.max(1, state.onboardingStep || 1);
-  if (step === 1) return onboardingFrame(`<span class="label">FIRST, THE DESTINATION</span><h1>Feedback becomes reviewable work—not a black-box answer.</h1><p>We will establish thesis intent, offer useful local connections, and preview your real workspace before you enter it.</p>${button("Begin with my thesis →", "onboarding-next:2")}`, step);
-  if (step === 2) return onboardingFrame(`<span class="label">NAME THE WORK</span><h1>What should we call your thesis?</h1><p>This is the only required step. Everything else remains optional and editable.</p><form class="profile-form onboarding-form" id="project-init-form"><label>Thesis name</label><input name="project" value="${state.project === "Thesis workspace" ? "" : esc(state.project)}" placeholder="Your working thesis title" required autofocus /><button class="button button-dark" type="submit">Create my workspace →</button></form>`, step);
-  if (step === 3) return onboardingFrame(`<span class="label">UNDERSTAND THE WORK</span><h1>Let ThesisOS read the project intent.</h1><p>Add a PDF, Markdown, or text project description. It will propose objectives for your approval; it never makes them canonical automatically.</p><form class="profile-form onboarding-form" id="document-import-form" aria-busy="${state.activeProfileForm === "document-import-form"}">${documentDropZone()}${profileCardLoading("document-import-form", "Importing and reading the document…")}<button class="button button-dark" type="submit"${state.activeProfileForm ? " disabled" : ""}>Import document →</button></form>`, step, { optional: true });
-  if (step === 4) return onboardingFrame(`<span class="label">BUILD THE RESEARCH BASE</span><h1>Connect the papers you already trust.</h1><p>Zotero stays read-only. ThesisOS uses its metadata to find evidence relevant to approved tasks.</p>${connectionPanel()}<div class="onboarding-actions">${button("Continue →", "onboarding-next:5", "dark")}</div>`, step, { optional: true });
-  if (step === 5) return onboardingFrame(`<span class="label">CHOOSE WORKING OUTPUTS</span><h1>Link files only when they exist.</h1><p>A manuscript folder can be a local LaTeX checkout or an Overleaf Git checkout. An Obsidian vault is where approved evidence notes can be written.</p><form class="profile-form onboarding-form" id="manuscript-link-form"><label>Optional manuscript folder</label><input name="thesisDir" placeholder="Leave blank if you do not have a .tex thesis yet" /><button class="button button-outline" type="submit">Link manuscript folder</button></form><div class="onboarding-actions">${button(state.obsidianVaultPath ? "Obsidian initialized ✓" : "Choose Obsidian vault", "choose-existing-vault", "outline")}${button("Continue →", "onboarding-next:6", "dark")}</div>`, step, { optional: true });
-  if (step === 6) return onboardingFrame(`<span class="label">PERSONALIZE THE WORK</span><h1>Where are you in the thesis?</h1><p>Stage and current scope make feedback more specific. Add them now or return from Thesis Profile.</p><form class="profile-form onboarding-form" id="profile-form"><label>Current focus or selected problem</label><input name="scopeName" placeholder="For example: interference mitigation" required /><label>Short scope summary</label><textarea name="scopeSummary" rows="3"></textarea><label>Current stage</label><select name="stage"><option value="proposal">Proposal</option><option value="literature">Literature review</option><option value="experiments">Experiments</option><option value="writing">Writing</option><option value="revision">Revision</option></select><button class="button button-dark" type="submit">Save and preview →</button></form>`, step, { optional: true });
+  if (step === 1) return onboardingFrame(`<span class="label">FIRST, THE DESTINATION</span><h1>Feedback becomes reviewable work—not a black-box answer.</h1><p>We will establish research intent, offer useful local connections, and preview your real workspace before you enter it.</p>${button("Begin with my research →", "onboarding-next:2")}`, step);
+  if (step === 2) return onboardingFrame(`<span class="label">NAME THE WORK</span><h1>What should we call this research?</h1><p>This is the only required step. Everything else remains optional and editable.</p><form class="profile-form onboarding-form" id="project-init-form"><label>Project name</label><input name="project" value="${state.project === "Research workspace" ? "" : esc(state.project)}" placeholder="Your working research title" required autofocus /><button class="button button-dark" type="submit">Create my workspace →</button></form>`, step);
+  if (step === 3) return onboardingFrame(`<span class="label">UNDERSTAND THE WORK</span><h1>Let Proofline read the project intent.</h1><p>Add a PDF, Markdown, or text project description. It will propose objectives for your approval; it never makes them canonical automatically.</p><form class="profile-form onboarding-form" id="document-import-form" aria-busy="${state.activeProfileForm === "document-import-form"}">${documentDropZone()}${profileCardLoading("document-import-form", "Importing and reading the document…")}<button class="button button-dark" type="submit"${state.activeProfileForm ? " disabled" : ""}>Import document →</button></form>`, step, { optional: true });
+  if (step === 4) return onboardingFrame(`<span class="label">BUILD THE RESEARCH BASE</span><h1>Connect the papers you already trust.</h1><p>Zotero stays read-only. Proofline uses its metadata to find evidence relevant to approved tasks.</p>${connectionPanel()}<div class="onboarding-actions">${button("Continue →", "onboarding-next:5", "dark")}</div>`, step, { optional: true });
+  if (step === 5) return onboardingFrame(`<span class="label">CHOOSE WORKING OUTPUTS</span><h1>Link files only when they exist.</h1><p>Choose a local folder for VS Code and an existing vault for Obsidian. You can add an Overleaf project URL later.</p><div class="onboarding-actions">${button(state.projectState?.project?.thesisDir ? "VS Code folder linked ✓" : "Choose VS Code folder", "choose-vscode-folder", "outline")}${button(state.obsidianVaultPath ? "Obsidian initialized ✓" : "Choose Obsidian vault", "choose-existing-vault", "outline")}${button("Continue →", "onboarding-next:6", "dark")}</div>`, step, { optional: true });
+  if (step === 6) return onboardingFrame(`<span class="label">PERSONALIZE THE WORK</span><h1>Where are you in the research?</h1><p>Stage and current scope make feedback more specific. Add them now or return from Research brief.</p><form class="profile-form onboarding-form" id="profile-form"><label>Current focus or selected problem</label><input name="scopeName" placeholder="For example: interference mitigation" required /><label>Short scope summary</label><textarea name="scopeSummary" rows="3"></textarea><label>Current stage</label><select name="stage"><option value="proposal">Proposal</option><option value="literature">Literature review</option><option value="experiments">Experiments</option><option value="writing">Writing</option><option value="revision">Revision</option></select><button class="button button-dark" type="submit">Save and preview →</button></form>`, step, { optional: true });
   const selected = state.projectState?.profile?.problems?.find((item) => item.selected);
   return onboardingFrame(`<span class="label">YOUR WORKSPACE PREVIEW</span><h1>${esc(state.project)}</h1><p>${state.projectState?.profile?.stage?.value ? `${esc(statusLabel(state.projectState.profile.stage.value))} · ` : ""}${selected ? esc(selected.name) : "Ready to add context when you have it"}</p><div class="preview-status-grid"><article><b>${state.connection.status === "connected" ? state.connection.paperCount : "—"}</b><span>Zotero papers</span></article><article><b>${state.projectState?.profile?.objectives?.length || 0}</b><span>Objectives</span></article><article><b>${state.projectState?.project?.thesisDir ? "Linked" : "Optional"}</b><span>Manuscript</span></article></div><p class="helper">Incomplete setup will appear as quiet next steps, never as a blocker.</p>${button("Enter workspace →", "finish-onboarding")}`, step);
 }
@@ -262,29 +264,29 @@ function legacyOverview() {
   const openTasks = allTasks.filter((task) => task.approvalStatus !== "rejected" && task.status !== "completed").length;
   const configured = [state.profileReadiness.ready, connected, Boolean(canonical?.project?.thesisDir), Boolean(state.obsidianVaultPath), Boolean(profile.stage?.value && selected)].filter(Boolean).length;
   const setupLabel = `Setup · ${configured} of 5 configured`;
-  const nextAction = !state.profileReadiness.ready ? { label: "Complete thesis context", view: "profile" } : !connected ? { label: "Connect Zotero", view: "integrations" } : { label: "Add supervisor feedback", action: "focus-feedback" };
+  const nextAction = !state.profileReadiness.ready ? { label: "Complete research context", view: "profile" } : !connected ? { label: "Connect Zotero", view: "integrations" } : { label: "Add reviewer feedback", action: "focus-feedback" };
   const stage = profile.stage?.value ? statusLabel(profile.stage.value) : "Context not complete";
   const setupItems = [
-    [true, "Thesis named", "profile"],
-    [state.profileReadiness.ready, "Thesis context approved", "profile"],
+    [true, "Research named", "profile"],
+    [state.profileReadiness.ready, "Research context approved", "profile"],
     [connected, "Zotero connected", "integrations"],
     [Boolean(canonical?.project?.thesisDir), "Manuscript linked", "profile"],
     [Boolean(state.obsidianVaultPath), "Obsidian initialized", "integrations"]
   ];
   const setupPanel = `<aside class="setup-path panel ${state.setupCollapsed ? "collapsed" : ""}"><button class="setup-toggle" data-action="toggle-setup" aria-expanded="${state.setupCollapsed ? "false" : "true"}" aria-controls="setup-path-details"><span><b>${setupLabel}</b><small>Optional · resumable</small></span><span>${state.setupCollapsed ? "Show ↓" : "Hide ↑"}</span></button><div id="setup-path-details" ${state.setupCollapsed ? "hidden" : ""}>${setupItems.map(([done, label, view]) => `<button data-view="${view}"><i>${done ? "✓" : "→"}</i><span>${label}</span></button>`).join("")}</div></aside>`;
-  const feedbackStatus = !state.profileReadiness.ready ? `<p class="context-notice">You can save feedback now. Add thesis context before creating focused tasks.</p>` : `<p class="helper">Only the thesis context you approved and this exact feedback are sent to the task assistant.</p>`;
+  const feedbackStatus = !state.profileReadiness.ready ? `<p class="context-notice">You can save feedback now. Add research context before creating focused tasks.</p>` : `<p class="helper">Only the research context you approved and this exact feedback are sent to the task assistant.</p>`;
   const demoFeedbackChoices = state.connection.mode === "demo" ? `<div class="demo-feedback-choices"><span class="label">TRY A DEMO REVIEW</span><p>Choose a vague comment, challenge a claim, or test a feasibility assumption.</p><div>${demoFeedbackOptions.map((option) => button(option.title, `seed-demo-feedback:${option.id}`, "outline", state.workflowBusy)).join("")}</div></div>` : "";
   const latestFeedbackAction = !activeThread?.tasks?.length
     ? state.profileReadiness.ready
       ? `<button class="card-link" data-action="resume-feedback:${activeThread.id}">Create tasks from this feedback <span>→</span></button>`
-      : `<button class="card-link" data-view="profile">Choose a thesis scope <span>→</span></button>`
+      : `<button class="card-link" data-view="profile">Choose a research scope <span>→</span></button>`
     : `<button class="card-link" data-view="tasks">Review tasks <span>→</span></button>`;
   const placement = activeThread?.placement;
   const placementLabel = placement?.stage ? thesisStages.find(([id]) => id === placement.stage)?.[1] ?? statusLabel(placement.stage) : "No stage selected";
   const chapterOptions = (canonical?.manuscript?.chapters ?? []).map((chapter) => `<option value="${esc(chapter.id)}"${placement?.targetLocationIds?.includes(chapter.id) ? " selected" : ""}>${esc(`${chapter.number ? `${chapter.number} · ` : ""}${chapter.title}`)}</option>`).join("");
-  const placementPanel = activeThread ? `<section class="feedback-placement panel"><div><span class="label">FEEDBACK PLACEMENT</span><h3>${placement?.status === "confirmed" ? "Placement confirmed" : "Review suggested placement"}</h3><p>${esc(placement?.rationale ?? "Choose the thesis stage this feedback should guide.")}</p></div><form id="feedback-placement-form"><input type="hidden" name="feedbackThreadId" value="${esc(activeThread.id)}" /><label>Thesis stage</label><select name="stage">${thesisStageOptions(placement?.stage ?? profile.stage?.value ?? "")}</select>${chapterOptions ? `<label>Related manuscript section <small>optional</small></label><select name="targetLocationId"><option value="">No section selected</option>${chapterOptions}</select>` : ""}<div class="form-footer">${button("Confirm placement", "confirm-feedback-placement", "outline", state.workflowBusy)}<button class="text-button" type="button" data-action="unassign-feedback-placement">Leave unassigned</button></div></form></section>` : "";
+  const placementPanel = activeThread ? `<section class="feedback-placement panel"><div><span class="label">FEEDBACK PLACEMENT</span><h3>${placement?.status === "confirmed" ? "Placement confirmed" : "Review suggested placement"}</h3><p>${esc(placement?.rationale ?? "Choose the research phase this feedback should guide.")}</p></div><form id="feedback-placement-form"><input type="hidden" name="feedbackThreadId" value="${esc(activeThread.id)}" /><label>Research phase</label><select name="stage">${thesisStageOptions(placement?.stage ?? profile.stage?.value ?? "")}</select>${chapterOptions ? `<label>Related manuscript section <small>optional</small></label><select name="targetLocationId"><option value="">No section selected</option>${chapterOptions}</select>` : ""}<div class="form-footer">${button("Confirm placement", "confirm-feedback-placement", "outline", state.workflowBusy)}<button class="text-button" type="button" data-action="unassign-feedback-placement">Leave unassigned</button></div></form></section>` : "";
   const feedbackHistory = threads.length ? `<section class="feedback-history panel"><div class="panel-head"><span class="label">FEEDBACK HISTORY</span><span class="timestamp">${threads.length} saved</span></div>${[...threads].reverse().map((thread) => { const threadPlacement = thread.placement; const threadStage = threadPlacement?.stage ? thesisStages.find(([id]) => id === threadPlacement.stage)?.[1] ?? statusLabel(threadPlacement.stage) : "Needs placement"; return `<button class="feedback-history-item ${thread.id === activeThread?.id ? "selected" : ""}" data-action="select-feedback:${thread.id}"><span><b>${esc(thread.title)}</b><small>${esc(shortCopy(thread.feedback, 15))}</small></span><em>${esc(threadPlacement?.status === "confirmed" ? threadStage : `Suggested · ${threadStage}`)}</em></button>`; }).join("")}</section>` : "";
-  return `<section class="lifecycle-head"><div>${eyebrow("Your thesis workspace")}<h1>${esc(canonical?.project?.name || state.project)}</h1><p><span class="status-dot"></span>${esc(stage)}${selected ? ` · Focused on ${esc(selected.name)}` : ""}</p></div><button class="button button-outline" ${nextAction.action ? `data-action="${nextAction.action}"` : `data-view="${nextAction.view}"`}>${esc(nextAction.label)} →</button></section>
+  return `<section class="lifecycle-head"><div>${eyebrow("Your research workspace")}<h1>${esc(canonical?.project?.name || state.project)}</h1><p><span class="status-dot"></span>${esc(stage)}${selected ? ` · Focused on ${esc(selected.name)}` : ""}</p></div><button class="button button-outline" ${nextAction.action ? `data-action="${nextAction.action}"` : `data-view="${nextAction.view}"`}>${esc(nextAction.label)} →</button></section>
     <section class="metric-grid"><article><b>${connected ? state.connection.paperCount : "—"}</b><span>Zotero papers</span></article><article><b>${profile.objectives?.length ?? 0}</b><span>Objectives</span></article><article><b>${openTasks}</b><span>Open tasks</span></article><article><b>${threads.length}</b><span>Feedback threads</span></article></section>
     <section class="lifecycle-grid"><div>${demoFeedbackChoices}<form class="feedback-form panel overview-feedback" id="feedback-form"><div class="panel-head"><span class="label">ADD SUPERVISOR FEEDBACK</span><span class="timestamp">Saved in this project</span></div><label for="feedback-title">Feedback title <small>optional</small></label><input id="feedback-title" name="title" value="${esc(state.feedbackTitle)}" placeholder="For example: Section 3.2 revisions" /><label for="feedback-text">Supervisor feedback</label><textarea id="feedback-text" name="feedback" rows="6" placeholder="Paste or type the exact feedback here." required>${esc(state.feedback)}</textarea><label for="workflow-provider">Task assistant</label><select id="workflow-provider" name="provider">${workflowProviderOptions()}</select>${feedbackStatus}${sectionActivity(["task-graph", "feedback-capture"])}${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="form-footer"><span class="read-only-note"><i></i>${state.profileReadiness.ready ? "Reviewable task plan" : "Save now · plan work later"}</span>${button(state.profileReadiness.ready ? "Create proposed tasks →" : "Save feedback →", "analyze-feedback", "dark", state.workflowBusy)}</div></form>${latest ? `<article class="latest-feedback panel"><div class="panel-head"><span class="label">LATEST FEEDBACK</span><span class="timestamp">${esc(statusLabel(latest.status))}</span></div><blockquote>“${esc(latest.feedback)}”</blockquote><div class="byline">${latest.tasks?.length || 0} proposed tasks <span>${latest.tasks?.length ? "Review required" : state.profileReadiness.ready ? "Ready to turn into tasks" : "Choose a thesis scope first"}</span></div>${latestFeedbackAction}</article>` : ""}</div><div>${setupPanel}<section class="integration-health"><button class="panel" data-view="integrations"><i class="${connected ? "live" : ""}"></i><span><b>Zotero</b><small>${connected ? `Connected locally · ${state.connection.paperCount} papers` : "Not connected"}</small></span><em>→</em></button><button class="panel" data-view="profile"><i class="${canonical?.project?.thesisDir ? "live" : ""}"></i><span><b>Manuscript</b><small>${canonical?.project?.thesisDir ? `Linked · ${esc(canonical.project.thesisDir)}` : "Not linked"}</small></span><em>→</em></button><button class="panel" data-view="integrations"><i class="${state.obsidianVaultPath ? "live" : ""}"></i><span><b>Obsidian</b><small>${state.obsidianVaultPath ? `Initialized · ${esc(state.obsidianVaultPath)}` : "Not initialized"}</small></span><em>→</em></button></section></div></section>`;
 }
@@ -305,7 +307,7 @@ function supervisorReview() {
   const selected = profile.problems?.find((item) => item.selected);
   const stage = profile.stage?.value ? stageName(profile.stage.value) : "Thesis context incomplete";
   const next = !state.profileReadiness.ready ? `<button class="button button-outline" data-view="profile">Complete thesis context →</button>` : !connected ? `<button class="button button-outline" data-view="integrations">Connect Zotero →</button>` : "";
-  const feedbackPrompts = `<section class="feedback-prompts panel"><span class="label">TRY THE REVIEWABLE WORKFLOW</span><h2>Use a comment that exposes the trail.</h2><p>Each starter shows a different ThesisOS strength: preserving a supervisor’s wording, turning it into bounded work, and linking that work to evidence for review.</p><div>${demoFeedbackOptions.map((option) => `<button type="button" class="feedback-prompt" data-action="use-feedback-prompt:${option.id}"><strong>${esc(option.title)}</strong><span>${esc(option.outcome)}</span><b>Use this →</b></button>`).join("")}</div></section>`;
+  const feedbackPrompts = `<section class="feedback-prompts panel"><span class="label">TRY THE REVIEWABLE WORKFLOW</span><h2>Use a comment that exposes the trail.</h2><p>Each starter shows a different Proofline strength: preserving a reviewer’s wording, turning it into bounded work, and linking that work to evidence for review.</p><div>${demoFeedbackOptions.map((option) => `<button type="button" class="feedback-prompt" data-action="use-feedback-prompt:${option.id}"><strong>${esc(option.title)}</strong><span>${esc(option.outcome)}</span><b>Use this →</b></button>`).join("")}</div></section>`;
   return `<section class="lifecycle-head"><div>${eyebrow("Your thesis workspace")}<h1>${esc(canonical?.project?.name || state.project)}</h1><p><span class="status-dot"></span>${esc(stage)}${selected ? ` · Focused on ${esc(selected.name)}` : ""}</p></div>${next}</section><section class="lifecycle-grid"><div>${feedbackPrompts}<form class="feedback-form panel overview-feedback" id="feedback-form"><div class="panel-head"><span class="label">CAPTURE A SUPERVISOR NOTE</span><span class="timestamp">Original wording is saved</span></div><label for="feedback-title">Short label <small>optional</small></label><input id="feedback-title" name="title" value="${esc(state.feedbackTitle)}" placeholder="For example: Scope of Section 3.2" /><label for="feedback-text">What did your supervisor say?</label><textarea id="feedback-text" name="feedback" rows="6" placeholder="Paste or type their exact comment here." required>${esc(state.feedback)}</textarea><label for="workflow-provider">Task assistant</label><select id="workflow-provider" name="provider">${workflowProviderOptions()}</select>${feedbackStatus}${sectionActivity(["task-graph", "feedback-capture"])}<div class="form-footer"><span class="read-only-note"><i></i>${state.profileReadiness.ready ? "Creates a reviewable work thread" : "Saves the original note"}</span>${button(state.profileReadiness.ready ? "Create work thread →" : "Save note →", "analyze-feedback", "dark", state.workflowBusy)}</div></form>${active ? `<article class="latest-feedback panel"><div class="panel-head"><span class="label">ACTIVE WORK THREAD</span><span class="timestamp">${esc(active.tasks?.length ? `${active.tasks.length} tasks` : "Ready to plan")}</span></div><blockquote>“${esc(shortCopy(active.feedback, 38, 2))}”</blockquote>${active.tasks?.length ? `<button class="card-link" data-view="tasks">Review this thread’s tasks <span>→</span></button>` : `<button class="card-link" data-action="resume-feedback:${active.id}">Turn this note into tasks <span>→</span></button>`}</article>` : ""}</div><div>${history}<section class="integration-health"><button class="panel" data-view="integrations"><i class="${connected ? "live" : ""}"></i><span><b>Zotero</b><small>${connected ? `Connected locally · ${state.connection.paperCount} papers` : "Not connected"}</small></span><em>→</em></button><button class="panel" data-view="profile"><i class="${canonical?.project?.thesisDir ? "live" : ""}"></i><span><b>Manuscript</b><small>${canonical?.project?.thesisDir ? "Linked" : "Not linked"}</small></span><em>→</em></button></section></div></section>`;
 }
 
@@ -315,9 +317,9 @@ function overview() {
   const threads = canonical?.feedbackThreads ?? [];
   const openTasks = threads.flatMap((thread) => thread.tasks ?? []).filter((task) => task.approvalStatus !== "rejected" && task.status !== "completed").length;
   const active = threads.find(({ id }) => id === state.feedbackThreadId) ?? threads.at(-1);
-  const stage = profile.stage?.value ? thesisStages.find(([id]) => id === profile.stage.value)?.[1] ?? statusLabel(profile.stage.value) : "Set your thesis phase";
+  const stage = profile.stage?.value ? thesisStages.find(([id]) => id === profile.stage.value)?.[1] ?? statusLabel(profile.stage.value) : "Set your research phase";
   const reviewSummary = active ? `<article class="overview-review panel"><span class="label">SUPERVISOR REVIEW</span><h2>${esc(active.title)}</h2><p>${esc(shortCopy(active.feedback, 26, 2))}</p><div><span>${active.tasks?.length || 0} task${active.tasks?.length === 1 ? "" : "s"} in this thread</span><button class="text-button" data-view="feedback">Open review workspace <span>→</span></button></div></article>` : `<article class="overview-review panel"><span class="label">SUPERVISOR REVIEW</span><h2>No note captured yet.</h2><p>Keep comments, resulting tasks, phase placement, and evidence in one reviewable thread.</p><button class="button button-dark" data-view="feedback">Capture a supervisor note →</button></article>`;
-  return `<section class="lifecycle-head overview-head"><div>${eyebrow("Your thesis workspace")}<h1>${esc(canonical?.project?.name || state.project)}</h1><p><span class="status-dot"></span>${esc(stage)}</p></div><button class="button button-outline" data-view="feedback">Open supervisor review →</button></section><section class="overview-at-a-glance"><article class="panel"><span class="label">CURRENT PHASE</span><strong>${esc(stage)}</strong><small>Set from your approved thesis profile</small></article><article class="panel"><span class="label">OPEN WORK</span><strong>${openTasks}</strong><small>Tasks awaiting review or completion</small></article><article class="panel"><span class="label">REVIEW THREADS</span><strong>${threads.length}</strong><small>Supervisor notes kept with their outcomes</small></article></section><section class="overview-clean-grid">${reviewSummary}<article class="overview-next panel"><span class="label">WHAT MAKES THIS DIFFERENT</span><h2>Every task keeps its reason.</h2><p>ThesisOS preserves the original note, the thesis phase it belongs to, the task it created, and the evidence selected to address it.</p><button class="text-button" data-view="feedback">See the review trail <span>→</span></button></article></section>`;
+  return `<section class="lifecycle-head overview-head"><div>${eyebrow("Your research workspace")}<h1>${esc(canonical?.project?.name || state.project)}</h1><p><span class="status-dot"></span>${esc(stage)}</p></div><button class="button button-outline" data-view="feedback">Open reviewer feedback →</button></section><section class="overview-at-a-glance"><article class="panel"><span class="label">CURRENT PHASE</span><strong>${esc(stage)}</strong><small>Set from your approved research brief</small></article><article class="panel"><span class="label">OPEN WORK</span><strong>${openTasks}</strong><small>Tasks awaiting review or completion</small></article><article class="panel"><span class="label">REVIEW THREADS</span><strong>${threads.length}</strong><small>Reviewer notes kept with their outcomes</small></article></section><section class="overview-clean-grid">${reviewSummary}<article class="overview-next panel"><span class="label">WHAT MAKES THIS DIFFERENT</span><h2>Every task keeps its reason.</h2><p>Proofline preserves the original note, the research phase it belongs to, the task it created, and the evidence selected to address it.</p><button class="text-button" data-view="feedback">See the review trail <span>→</span></button></article></section>`;
 }
 
 function provenanceLabel(value) {
@@ -328,18 +330,18 @@ function provenanceLabel(value) {
 }
 
 function profile() {
-  if (!state.projectState) return `<div class="page-intro compact">${eyebrow("Onboarding / thesis intent")}<h1>Start with your project document.</h1><p>Use your project PDF, description, or proposal to establish the thesis objectives. If you already have an editable LaTeX manuscript, you can attach its folder now; otherwise leave it blank.</p></div>
-    <form class="panel profile-form" id="project-init-form"><label>Project name</label><input name="project" value="${esc(state.project)}" required /><label>Optional manuscript folder</label><input name="thesisDir" placeholder="Leave blank if you do not have a .tex thesis yet" /><label>Obsidian vault</label><input name="vaultPath" value="${esc(state.obsidianVaultPath)}" placeholder="/absolute/path/to/vault" required /><div class="form-footer">${button("Initialize thesis profile →", "submit-init", "dark", state.workflowBusy)}</div></form>`;
+  if (!state.projectState) return `<div class="page-intro compact">${eyebrow("Onboarding / research intent")}<h1>Start with your project document.</h1><p>Use your project PDF, description, or proposal to establish the research objectives. If you already have an editable LaTeX manuscript, you can attach its folder now; otherwise leave it blank.</p></div>
+    <form class="panel profile-form" id="project-init-form"><label>Project name</label><input name="project" value="${esc(state.project)}" required /><label>Optional manuscript folder</label><input name="thesisDir" placeholder="Leave blank if you do not have a .tex manuscript yet" /><label>Obsidian vault</label><input name="vaultPath" value="${esc(state.obsidianVaultPath)}" placeholder="/absolute/path/to/vault" required /><div class="form-footer">${button("Initialize research brief →", "submit-init", "dark", state.workflowBusy)}</div></form>`;
 
   const canonical = state.projectState;
   const approved = canonical.profile || {};
   const proposal = canonical.profileProposal?.status === "pending" ? canonical.profileProposal : null;
   const missing = state.profileReadiness.missing || [];
   const missingLabels = {
-    titleOrTopic: "a thesis title or topic",
+    titleOrTopic: "a research title or topic",
     objectives: "at least one objective",
     selectedScope: "a selected scope",
-    stage: "the current thesis stage"
+    stage: "the current research phase"
   };
   const missingSummary = missing.map((field) => missingLabels[field] || field).join(", ");
   const proposalFields = proposal ? Object.entries(proposal.fields).map(([name, value]) => {
@@ -355,19 +357,19 @@ function profile() {
   }).join("");
   const selected = (approved.problems || []).find((item) => item.selected);
   const profileStatus = state.profileReadiness.ready ? "Ready for feedback tasks" : `Still needed: ${missingSummary || "review the proposed profile"}`;
-  const documentTools = `<details class="profile-secondary"><summary>Project document and extraction <span>${canonical.documents?.length || 0} document${canonical.documents?.length === 1 ? "" : "s"}</span></summary><div class="profile-secondary-content"><form class="profile-form" id="document-import-form" aria-busy="${state.activeProfileForm === "document-import-form"}"><h3>Add or replace a project document</h3><p>Use this only when you want ThesisOS to read additional project material.</p>${documentDropZone()}${profileCardLoading("document-import-form", "Importing and reading the document…")}<button class="button button-outline" type="submit"${state.activeProfileForm ? " disabled" : ""}>Upload document</button></form>${canonical.documents?.length && !proposal ? `<form class="profile-form profile-extraction" id="profile-propose-form" aria-busy="${state.activeProfileForm === "profile-propose-form"}"><h3>Suggest updates from a document</h3><p>ThesisOS proposes changes for your review; it never replaces your profile automatically.</p><select name="documentId">${canonical.documents.map((item) => `<option value="${esc(item.id)}">${esc(item.filename)}</option>`).join("")}</select><label>Assistant</label><select name="provider"><option value="codex">Codex CLI · local login</option><option value="openai">OpenAI · GPT-5.6 API</option></select>${profileCardLoading("profile-propose-form", "Reading project material…")}<button class="button button-outline" type="submit"${state.activeProfileForm ? " disabled" : ""}>Suggest profile updates</button></form>` : ""}</div></details>`;
-  return `<div class="page-intro compact profile-intro">${eyebrow("Thesis profile")}<h1>${state.profileReadiness.ready ? "Your thesis profile is ready." : "Set up your thesis profile."}</h1><p>${state.profileReadiness.ready ? "ThesisOS will use this approved information when it turns feedback into research tasks." : `To create focused tasks, add ${esc(missingSummary || "the remaining profile details")}.`}</p></div>
+  const documentTools = `<details class="profile-secondary"><summary>Project document and extraction <span>${canonical.documents?.length || 0} document${canonical.documents?.length === 1 ? "" : "s"}</span></summary><div class="profile-secondary-content"><form class="profile-form" id="document-import-form" aria-busy="${state.activeProfileForm === "document-import-form"}"><h3>Add or replace a project document</h3><p>Use this only when you want Proofline to read additional project material.</p>${documentDropZone()}${profileCardLoading("document-import-form", "Importing and reading the document…")}<button class="button button-outline" type="submit"${state.activeProfileForm ? " disabled" : ""}>Upload document</button></form>${canonical.documents?.length && !proposal ? `<form class="profile-form profile-extraction" id="profile-propose-form" aria-busy="${state.activeProfileForm === "profile-propose-form"}"><h3>Suggest updates from a document</h3><p>Proofline proposes changes for your review; it never replaces your brief automatically.</p><select name="documentId">${canonical.documents.map((item) => `<option value="${esc(item.id)}">${esc(item.filename)}</option>`).join("")}</select><label>Assistant</label><select name="provider"><option value="codex">Codex CLI · local login</option><option value="openai">OpenAI · GPT-5.6 API</option></select>${profileCardLoading("profile-propose-form", "Reading project material…")}<button class="button button-outline" type="submit"${state.activeProfileForm ? " disabled" : ""}>Suggest brief updates</button></form>` : ""}</div></details>`;
+  return `<div class="page-intro compact profile-intro">${eyebrow("Research brief")}<h1>${state.profileReadiness.ready ? "Your research brief is ready." : "Set up your research brief."}</h1><p>${state.profileReadiness.ready ? "Proofline will use this approved information when it turns feedback into research tasks." : `To create focused tasks, add ${esc(missingSummary || "the remaining brief details")}.`}</p></div>
     <section class="profile-status panel"><span class="status-dot"></span><div><strong>${esc(profileStatus)}</strong><p>${state.profileReadiness.ready ? "You can now create tasks from supervisor feedback." : "Complete the short form below, then return to your feedback."}</p></div></section>
     <section class="profile-workspace">
-      <form class="panel profile-form profile-focus-form" id="profile-form" aria-busy="${state.activeProfileForm === "profile-form"}"><span class="label">STEP 1 · YOUR CURRENT FOCUS</span><h2>Where are you in the thesis?</h2><p>Choose the stage you are working on now, then name the part your feedback is about.</p><label for="thesis-stage">Current thesis stage</label><select id="thesis-stage" name="stage">${thesisStageOptions(approved.stage?.value)}</select><ol class="thesis-stage-path">${thesisStages.map(([value, label], index) => `<li class="${approved.stage?.value === value ? "current" : ""}"><span>${String(index + 1).padStart(2, "0")}</span>${esc(label)}</li>`).join("")}</ol><label for="scope-name">What part are you working on?</label><input id="scope-name" name="scopeName" value="${esc(selected?.name || "")}" placeholder="For example: System model" required /><label for="scope-summary">Optional note</label><textarea id="scope-summary" name="scopeSummary" rows="2" placeholder="What are you trying to clarify or improve?">${esc(selected?.summary || "")}</textarea>${profileCardLoading("profile-form", "Saving your thesis profile…")}<button class="button button-dark" type="submit"${state.activeProfileForm ? " disabled" : ""}>Save my focus</button></form>
-      <article class="panel profile-summary"><div class="panel-head"><span class="label">WHAT THESISOS KNOWS</span><span class="timestamp">Updated revision ${canonical.revision}</span></div><h2>${esc(approved.title?.value || approved.topic?.value || "Your thesis title")}</h2>${approved.topic?.value && approved.title?.value ? `<p>${esc(approved.topic.value)}</p>` : ""}<div class="profile-facts"><div><span>Current focus</span><strong>${esc(selected?.name || "Not chosen yet")}</strong></div><div><span>Current stage</span><strong>${esc(approved.stage ? statusLabel(approved.stage.value) : "Not chosen yet")}</strong></div></div><h3>Approved objectives</h3><ul>${objectives || "<li>No objectives have been approved yet.</li>"}</ul><h3>Objective coverage</h3><ul class="objective-coverage">${objectiveCoverage || "<li>No objectives have been approved yet.</li>"}</ul>${(approved.seedReferences ?? []).length ? `<div class="seed-reference-check"><span>${approved.seedReferences.length} proposed reference${approved.seedReferences.length === 1 ? "" : "s"}</span><button class="text-button" data-action="reconcile-seed-references">Check Zotero matches →</button>${state.seedReferenceReport ? `<small>${state.seedReferenceReport.present.length} present · ${state.seedReferenceReport.missing.length} missing · ${state.seedReferenceReport.ambiguous.length} ambiguous</small>` : ""}</div>` : ""}</article>
+      <form class="panel profile-form profile-focus-form" id="profile-form" aria-busy="${state.activeProfileForm === "profile-form"}"><span class="label">STEP 1 · YOUR CURRENT FOCUS</span><h2>Where are you in the research?</h2><p>Choose the phase you are working on now, then name the part your feedback is about.</p><label for="thesis-stage">Current research phase</label><select id="thesis-stage" name="stage">${thesisStageOptions(approved.stage?.value)}</select><ol class="thesis-stage-path">${thesisStages.map(([value, label], index) => `<li class="${approved.stage?.value === value ? "current" : ""}"><span>${String(index + 1).padStart(2, "0")}</span>${esc(label)}</li>`).join("")}</ol><label for="scope-name">What part are you working on?</label><input id="scope-name" name="scopeName" value="${esc(selected?.name || "")}" placeholder="For example: System model" required /><label for="scope-summary">Optional note</label><textarea id="scope-summary" name="scopeSummary" rows="2" placeholder="What are you trying to clarify or improve?">${esc(selected?.summary || "")}</textarea>${profileCardLoading("profile-form", "Saving your research brief…")}<button class="button button-dark" type="submit"${state.activeProfileForm ? " disabled" : ""}>Save my focus</button></form>
+      <article class="panel profile-summary"><div class="panel-head"><span class="label">WHAT PROOFLINE KNOWS</span><span class="timestamp">Updated revision ${canonical.revision}</span></div><h2>${esc(approved.title?.value || approved.topic?.value || "Your research title")}</h2>${approved.topic?.value && approved.title?.value ? `<p>${esc(approved.topic.value)}</p>` : ""}<div class="profile-facts"><div><span>Current focus</span><strong>${esc(selected?.name || "Not chosen yet")}</strong></div><div><span>Current phase</span><strong>${esc(approved.stage ? statusLabel(approved.stage.value) : "Not chosen yet")}</strong></div></div><h3>Approved objectives</h3><ul>${objectives || "<li>No objectives have been approved yet.</li>"}</ul><h3>Objective coverage</h3><ul class="objective-coverage">${objectiveCoverage || "<li>No objectives have been approved yet.</li>"}</ul>${(approved.seedReferences ?? []).length ? `<div class="seed-reference-check"><span>${approved.seedReferences.length} proposed reference${approved.seedReferences.length === 1 ? "" : "s"}</span><button class="text-button" data-action="reconcile-seed-references">Check Zotero matches →</button>${state.seedReferenceReport ? `<small>${state.seedReferenceReport.present.length} present · ${state.seedReferenceReport.missing.length} missing · ${state.seedReferenceReport.ambiguous.length} ambiguous</small>` : ""}</div>` : ""}</article>
     </section>
     ${proposal ? `<form class="panel profile-form profile-review" id="profile-review-form" aria-busy="${state.activeProfileForm === "profile-review-form"}"><span class="label">PROFILE UPDATES TO REVIEW</span><h2>Choose what to keep</h2><p>Checked items will update your profile. Unchecked items will be ignored.</p>${proposalFields}${profileCardLoading("profile-review-form", "Saving approved profile fields…")}<button class="button button-dark" type="submit"${state.activeProfileForm ? " disabled" : ""}>Save selected updates</button></form>` : documentTools}`;
 }
 
 function legacyFeedback() {
-  if (state.projectState && !state.profileReadiness.ready) return `<div class="page-intro compact">${eyebrow("Feedback / context required")}<h1>Complete the thesis profile first.</h1><p>Feedback without approved objectives and scope produces generic work. Missing: ${esc(state.profileReadiness.missing.join(", "))}.</p>${button("Complete thesis profile →", "open-profile")}</div>`;
-  return `<div class="page-intro compact">${eyebrow("Feedback / source")}<h1>Keep the original wording.</h1><p>Add a real supervisor comment. ThesisOS interprets it against the approved thesis profile and manuscript map.</p></div><section class="feedback-layout"><form class="feedback-form panel" id="feedback-form"><label for="feedback-title">Feedback title</label><input id="feedback-title" name="title" value="${esc(state.feedbackTitle)}" placeholder="For example: Section 3.2 revisions" /><label for="feedback-text">Supervisor feedback</label><textarea id="feedback-text" name="feedback" rows="8" placeholder="Paste the exact feedback here." required>${esc(state.feedback)}</textarea><label for="workflow-provider">Decomposition runtime</label><select id="workflow-provider" name="provider">${workflowProviderOptions()}</select><p class="helper">Only approved thesis context and this feedback are sent to the selected runtime.</p>${sectionActivity(["task-graph"])}${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="form-footer"><span class="read-only-note"><i></i> Validated task artifact</span>${button(state.workflowBusy ? "Creating tasks…" : state.feedback ? "Update review tasks →" : "Create review tasks →", "analyze-feedback", "dark", state.workflowBusy)}</div></form><aside class="side-note"><span class="label">WHAT HAPPENS NEXT</span><ol><li><b>01</b><span>The runtime receives approved thesis context plus exact feedback.</span></li><li><b>02</b><span>The server validates the task graph and persists it canonically.</span></li><li><b>03</b><span>Every proposed task begins pending your approval.</span></li></ol></aside></section>`;
+  if (state.projectState && !state.profileReadiness.ready) return `<div class="page-intro compact">${eyebrow("Feedback / context required")}<h1>Complete the research brief first.</h1><p>Feedback without approved objectives and scope produces generic work. Missing: ${esc(state.profileReadiness.missing.join(", "))}.</p>${button("Complete research brief →", "open-profile")}</div>`;
+  return `<div class="page-intro compact">${eyebrow("Feedback / source")}<h1>Keep the original wording.</h1><p>Add a real reviewer comment. Proofline interprets it against the approved research brief and manuscript map.</p></div><section class="feedback-layout"><form class="feedback-form panel" id="feedback-form"><label for="feedback-title">Feedback title</label><input id="feedback-title" name="title" value="${esc(state.feedbackTitle)}" placeholder="For example: Section 3.2 revisions" /><label for="feedback-text">Reviewer feedback</label><textarea id="feedback-text" name="feedback" rows="8" placeholder="Paste the exact feedback here." required>${esc(state.feedback)}</textarea><label for="workflow-provider">Decomposition runtime</label><select id="workflow-provider" name="provider">${workflowProviderOptions()}</select><p class="helper">Only approved research context and this feedback are sent to the selected runtime.</p>${sectionActivity(["task-graph"])}${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="form-footer"><span class="read-only-note"><i></i> Validated task artifact</span>${button(state.workflowBusy ? "Creating tasks…" : state.feedback ? "Update review tasks →" : "Create review tasks →", "analyze-feedback", "dark", state.workflowBusy)}</div></form><aside class="side-note"><span class="label">WHAT HAPPENS NEXT</span><ol><li><b>01</b><span>The runtime receives approved research context plus exact feedback.</span></li><li><b>02</b><span>The server validates the task graph and persists it canonically.</span></li><li><b>03</b><span>Every proposed task begins pending your approval.</span></li></ol></aside></section>`;
 }
 
 function taskRow(task) { return `<button class="task-row" data-task="${task.id}"><span class="task-mark ${task.approvalStatus}">${task.approvalStatus === "approved" ? "✓" : ""}</span><span class="task-copy"><strong>${esc(task.title)}</strong><small>${esc(task.tool)} · ${statusLabel(task.status)}</small></span><span class="task-state ${task.approvalStatus}">${statusLabel(task.approvalStatus)}</span><span class="arrow">→</span></button>`; }
@@ -376,7 +378,12 @@ function tasks() {
   if (!state.tasks.length) return `<div class="page-intro compact">${eyebrow("Review / tasks")}<h1>No inferred work yet.</h1><p>Add supervisor feedback first. Tasks will appear here for approval before an integration can run.</p></div>${emptyState("No tasks to review", "The workspace will not invent tasks without a source comment.", "new-feedback", "Add feedback")}`;
   const feedback = readableFeedback(state.feedback);
   const paragraphs = feedback.split(/\n\s*\n/).filter(Boolean);
-  return `<div class="page-intro compact">${eyebrow("Review / tasks")}<h1>Approve the boundary.</h1><p>These tasks came from the validated ${esc(state.runtime?.provider || "workflow")} artifact. Approval changes their state; it does not yet execute write integrations.</p></div><section class="task-layout"><div class="task-graph panel"><div class="panel-head"><span class="label">SOURCE FEEDBACK</span><span class="timestamp">${state.runtime ? `${esc(state.runtime.provider)} · ${esc(state.runtime.model)}` : "Stored locally"}</span></div><div class="feedback-reading"><p class="feedback-reading-note">Cleaned for reading. The original feedback is retained unchanged.</p>${paragraphs.slice(0, 2).map((paragraph) => `<p>${esc(paragraph)}</p>`).join("")}${paragraphs.length > 2 ? `<details><summary>Read the remaining ${paragraphs.length - 2} paragraph${paragraphs.length === 3 ? "" : "s"}</summary>${paragraphs.slice(2).map((paragraph) => `<p>${esc(paragraph)}</p>`).join("")}</details>` : ""}</div><div class="graph-line"></div>${state.tasks.map((task, index) => `<button class="graph-task ${task.approvalStatus}" data-task="${task.id}"><span>${String(index + 1).padStart(2, "0")}</span><strong>${esc(task.title)}</strong><small>${esc(task.tool)} · ${statusLabel(task.approvalStatus)}</small><b>→</b></button>`).join("")}</div><aside class="approval-panel"><span class="label">APPROVAL MODEL</span><h2>Review first.<br />Run second.</h2><p>Zotero library access is read-only. Any future note, thesis, or Git write will require a separate explicit approval.</p><div class="approval-box"><i>✓</i><span>Approved tasks<br /><strong>${state.tasks.filter((task) => task.approvalStatus === "approved").length} of ${state.tasks.length}</strong></span></div></aside></section>`;
+  return `<div class="page-intro compact">${eyebrow("Review / tasks")}<h1>Approve, then continue in the right place.</h1><p>Obsidian, VS Code, and Overleaf tasks approve the task and open the linked workspace in one deliberate handoff. Other tasks still open for review first.</p></div><section class="task-layout"><div class="task-graph panel"><div class="panel-head"><span class="label">SOURCE FEEDBACK</span><span class="timestamp">${state.runtime ? `${esc(state.runtime.provider)} · ${esc(state.runtime.model)}` : "Stored locally"}</span></div><div class="feedback-reading"><p class="feedback-reading-note">Cleaned for reading. The original feedback is retained unchanged.</p>${paragraphs.slice(0, 2).map((paragraph) => `<p>${esc(paragraph)}</p>`).join("")}${paragraphs.length > 2 ? `<details><summary>Read the remaining ${paragraphs.length - 2} paragraph${paragraphs.length === 3 ? "" : "s"}</summary>${paragraphs.slice(2).map((paragraph) => `<p>${esc(paragraph)}</p>`).join("")}</details>` : ""}</div><div class="graph-line"></div>${state.tasks.map((task, index) => {
+    const handoff = ["obsidian", "vscode", "overleaf"].includes(task.tool);
+    const action = handoff ? (task.approvalStatus === "pending" ? `approve-and-open:${task.id}` : `open-task-tool:${task.id}`) : `open-task:${task.id}`;
+    const detail = handoff && task.approvalStatus === "pending" ? `Approve & open ${task.tool}` : `${task.tool} · ${statusLabel(task.approvalStatus)}`;
+    return `<button class="graph-task ${task.approvalStatus}" data-action="${action}"><span>${String(index + 1).padStart(2, "0")}</span><strong>${esc(task.title)}</strong><small>${esc(detail)}</small><b>→</b></button>`;
+  }).join("")}</div><aside class="approval-panel"><span class="label">APPROVAL MODEL</span><h2>Approve here.<br />Continue there.</h2><p>Opening a linked workspace never makes a write on your behalf.</p><div class="approval-box"><i>✓</i><span>Approved tasks<br /><strong>${state.tasks.filter((task) => task.approvalStatus === "approved").length} of ${state.tasks.length}</strong></span></div></aside></section>`;
 }
 
 function paperCard(paper, index) {
@@ -408,8 +415,8 @@ function noteWorkflowPanel() {
   const writeControls = state.notePreview ? (isDemo
     ? `<p class="demo-boundary">Judge mode stops at preview. No filesystem write is performed.</p>`
     : state.obsidianVaultPath
-      ? `<div class="vault-connected"><span class="label">OBSIDIAN VAULT CONNECTED</span><code>${esc(state.obsidianVaultPath)}</code><button class="text-button" data-action="change-obsidian-vault">Change vault</button></div><p class="helper">Notes go into <code>Evidence/</code> inside this vault. ThesisOS updates only notes it previously created.</p>${button(state.noteWrite ? (state.noteWrite.updated ? "Note updated ✓" : "Note written ✓") : "Approve and write note", "write-obsidian-note", "dark", Boolean(state.noteWrite))}`
-      : `<div class="vault-setup"><h3>Where should this note live?</h3><p>Choose an existing Obsidian vault, or create a new project vault. ThesisOS remembers your choice for this project.</p><div class="note-actions">${button("Choose existing vault", "choose-existing-vault", "dark")} ${button("Create new vault", "create-obsidian-vault", "outline")}</div></div>`) : "";
+      ? `<div class="vault-connected"><span class="label">OBSIDIAN VAULT CONNECTED</span><code>${esc(state.obsidianVaultPath)}</code><button class="text-button" data-action="change-obsidian-vault">Change vault</button></div><p class="helper">Notes go into <code>10_Literature_Notes/</code> inside this vault. Each feedback thread has its own note; Proofline updates only notes it previously created.</p>${button(state.noteWrite ? (state.noteWrite.updated ? "Note updated ✓" : "Note written ✓") : "Approve and write note", "write-obsidian-note", "dark", Boolean(state.noteWrite))}`
+      : `<div class="vault-setup"><h3>Where should this note live?</h3><p>Choose an existing Obsidian vault, or create a new project vault. Proofline remembers your choice for this project.</p><div class="note-actions">${button("Choose existing vault", "choose-existing-vault", "dark")} ${button("Create new vault", "create-obsidian-vault", "outline")}</div></div>`) : "";
   const traceableNotes = state.noteDraft?.sourceNotes ?? [];
   const traceback = state.claimTraceback ? `<article class="claim-traceback-result"><span class="label">TRACE COMPLETE</span><h3>${esc(state.claimTraceback.source.title)}</h3><div class="trace-explanation"><section><span>01</span><div><strong>Draft statement</strong><p>${esc(state.claimTraceback.claim?.summary || "No grounded source-note text was recorded.")}</p></div></section><section><span>02</span><div><strong>What this paper contributes</strong><p>${esc(state.claimTraceback.source.abstract || "The selected source has no abstract in this fixture.")}</p></div></section><section><span>03</span><div><strong>Why it matters here</strong><p>${esc(state.claimTraceback.claim?.relevance || "Researcher review is required before using this statement in the thesis.")}</p></div></section><section><span>04</span><div><strong>Review trail</strong><p><b>Supervisor asked:</b> ${esc(state.claimTraceback.feedback.comment)}</p><p><b>You approved:</b> ${esc(state.claimTraceback.task.title)}</p><small>Evidence ID: <code>${esc(state.claimTraceback.source.sourceId)}</code>${state.claimTraceback.responseMatrix ? ` · ${esc(state.claimTraceback.responseMatrix.status)}` : ""}</small></div></section></div></article>` : "";
   const tracePanel = state.notePreview && traceableNotes.length && state.feedbackThreadId ? `<section class="claim-traceback"><div><span class="label">CLAIM TRACEBACK</span><h3>Can this draft statement be defended?</h3><p>Choose a source to see its evidence and the feedback it addresses.</p></div><div class="trace-buttons">${traceableNotes.map((note, index) => button(`Trace source ${index + 1} →`, `trace-claim:${note.sourceId}`, "outline", state.workflowBusy)).join("")}</div>${traceback}</section>` : "";
@@ -417,7 +424,7 @@ function noteWorkflowPanel() {
 }
 
 function evidence() {
-  if (state.connection.status !== "connected") return `<div class="page-intro compact">${eyebrow("Library / Zotero")}<h1>Your papers appear after connection.</h1><p>ThesisOS reads top-level bibliographic metadata from Zotero Desktop and leaves the library unchanged.</p></div>${connectionPanel()}`;
+  if (state.connection.status !== "connected") return `<div class="page-intro compact">${eyebrow("Library / Zotero")}<h1>Your papers appear after connection.</h1><p>Proofline reads top-level bibliographic metadata from Zotero Desktop and leaves the library unchanged.</p></div>${connectionPanel()}`;
   const showingSearchResults = state.searchArtifact !== null;
   const visiblePapers = showingSearchResults ? state.candidates : state.papers;
   const literatureTask = state.tasks.find((task) => task.kind === "literature");
@@ -460,22 +467,29 @@ function libraryChoices() {
 
 function connectionPanel() {
   const status = state.connection.status;
-  if (status === "checking") return `<section class="connection-panel panel is-checking"><span class="connection-index">01</span><div><span class="label">ZOTERO DESKTOP</span><h2>Looking for the local library.</h2><p>Keep Zotero open while ThesisOS checks the read-only API on this machine.</p></div>${button("Checking…", "connect-zotero", "outline", true)}</section>`;
-  if (status === "selection_required") return `<section class="connection-panel panel"><span class="connection-index">01</span><div class="connection-copy"><span class="label">CHOOSE A LIBRARY</span><h2>More than one library contains papers.</h2><p>Choose a library for this project. ThesisOS remembers the library ID and will not merge libraries unless you explicitly request it from the CLI.</p>${libraryChoices()}</div></section>`;
+  if (status === "checking") return `<section class="connection-panel panel is-checking"><span class="connection-index">01</span><div><span class="label">ZOTERO DESKTOP</span><h2>Looking for the local library.</h2><p>Keep Zotero open while Proofline checks the read-only API on this machine.</p></div>${button("Checking…", "connect-zotero", "outline", true)}</section>`;
+  if (status === "selection_required") return `<section class="connection-panel panel"><span class="connection-index">01</span><div class="connection-copy"><span class="label">CHOOSE A LIBRARY</span><h2>More than one library contains papers.</h2><p>Choose a library for this project. Proofline remembers the library ID and will not merge libraries unless you explicitly request it from the CLI.</p>${libraryChoices()}</div></section>`;
   if (status === "connected") {
     const demo = state.connection.mode === "demo";
-    return `<section class="connection-panel panel is-connected"><span class="connection-index">✓</span><div><span class="label">${demo ? "DEMO DATA · READ-ONLY FIXTURE" : "ZOTERO DESKTOP · READ-ONLY"}</span><h2>${esc(state.connection.library?.name || "Zotero library")}</h2><p>${demo ? `${state.connection.paperCount} sample papers are active. This data is not your Zotero library.` : `${state.connection.paperCount} bibliographic papers available. ThesisOS has not changed any Zotero item.`}</p></div><div class="connection-actions">${button("Open library →", "open-library")}<button class="text-button" data-action="connect-zotero">${demo ? "Try Zotero again" : "Refresh connection"}</button></div></section>`;
+    return `<section class="connection-panel panel is-connected"><span class="connection-index">✓</span><div><span class="label">${demo ? "DEMO DATA · READ-ONLY FIXTURE" : "ZOTERO DESKTOP · READ-ONLY"}</span><h2>${esc(state.connection.library?.name || "Zotero library")}</h2><p>${demo ? `${state.connection.paperCount} sample papers are active. This data is not your Zotero library.` : `${state.connection.paperCount} bibliographic papers available. Proofline has not changed any Zotero item.`}</p></div><div class="connection-actions">${button("Open library →", "open-library")}<button class="text-button" data-action="connect-zotero">${demo ? "Try Zotero again" : "Refresh connection"}</button></div></section>`;
   }
-  return `<section class="connection-panel panel is-error"><span class="connection-index">!</span><div><span class="label">ZOTERO DESKTOP NOT AVAILABLE</span><h2>Open Zotero and try again.</h2><p>${esc(state.connection.message || "ThesisOS could not reach Zotero Desktop.")}</p><ol class="connection-checklist"><li>Open Zotero Desktop on this machine.</li><li>In Zotero settings, allow other applications to communicate with Zotero.</li><li>Return here and retry the local connection.</li></ol><p><strong>Demo data is optional and always labelled.</strong> It lets reviewers test the workflow without Zotero.</p></div><div class="connection-actions">${button("Open Zotero and try again", "connect-zotero")}${button("Use demo library", "use-demo-library", "outline")}</div></section>`;
+  return `<section class="connection-panel panel is-error"><span class="connection-index">!</span><div><span class="label">ZOTERO DESKTOP NOT AVAILABLE</span><h2>Open Zotero and try again.</h2><p>${esc(state.connection.message || "Proofline could not reach Zotero Desktop.")}</p><ol class="connection-checklist"><li>Open Zotero Desktop on this machine.</li><li>In Zotero settings, allow other applications to communicate with Zotero.</li><li>Return here and retry the local connection.</li></ol><p><strong>Demo data is optional and always labelled.</strong> It lets reviewers test the workflow without Zotero.</p></div><div class="connection-actions">${button("Open Zotero and try again", "connect-zotero")}${button("Use demo library", "use-demo-library", "outline")}</div></section>`;
 }
 
 function integrations() {
-  return `<div class="page-intro compact">${eyebrow("Connections / local-first")}<h1>Connect without handing over a password.</h1><p>ThesisOS first checks Zotero Desktop on this machine. The local API needs no API key and remains read-only.</p></div>${sectionActivity(["zotero"])}${connectionPanel()}<section class="connection-flow"><article><span>01</span><h3>Connect Zotero Desktop</h3><p>ThesisOS checks the local Zotero API. Your Zotero username and password are never requested.</p></article><article><span>02</span><h3>Choose a library</h3><p>If several personal or group libraries contain papers, choose one and remember it for this project.</p></article><article><span>03</span><h3>Review real metadata</h3><p>Load top-level papers into the Library view with source IDs and a visible read-only boundary.</p></article></section><section class="cloud-note panel"><div><span class="label">ZOTERO CLOUD · LATER</span><h2>Cloud authorization is documented, not simulated.</h2><p>A future Connect Zotero Cloud action will redirect to zotero.org using OAuth. Manual API keys and passwords will not be the normal onboarding flow.</p></div><button class="button button-outline" disabled>Connect Zotero Cloud · not available</button></section><section class="integration-list secondary-integrations"><article class="integration panel${state.noteWrite ? "" : " muted"}"><div class="integration-icon">O</div><div><span class="label">LOCAL MARKDOWN ADAPTER</span><h2>Obsidian</h2><p>${state.noteWrite ? `Literature note written to ${esc(state.noteWrite.path)}.` : "Preview evidence-linked Markdown, then explicitly approve a write into a local vault."}</p></div><span class="integration-state">${state.noteWrite ? "Connected" : "Ready"}</span></article></section>`;
+  const project = state.projectState?.project ?? {};
+  const workspace = [
+    project.thesisDir && { tool: "vscode", icon: "⌘", title: "VS Code", path: project.thesisDir, copy: "Opens this selected local folder." },
+    project.vaultPath && { tool: "obsidian", icon: "O", title: "Obsidian", path: project.vaultPath, copy: "Opens this configured vault." },
+    project.overleafUrl && { tool: "overleaf", icon: "↗", title: "Overleaf", path: project.overleafUrl, copy: "Opens this project in your browser." }
+  ].filter(Boolean);
+  const linkedTools = workspace.length ? `<section class="integration-list secondary-integrations">${workspace.map((item) => `<article class="integration panel"><div class="integration-icon">${item.icon}</div><div><span class="label">LINKED WORKSPACE</span><h2>${item.title}</h2><p>${esc(item.copy)} <code>${esc(item.path)}</code></p></div><button class="text-button" data-action="open-workspace-tool:${item.tool}">Open ${item.title} ↗</button></article>`).join("")}</section>` : "";
+  return `<div class="page-intro compact">${eyebrow("Connections / local-first")}<h1>Connect only what you use.</h1><p>Zotero remains read-only. Local folders and an optional Overleaf URL are saved only for this project.</p></div>${sectionActivity(["zotero", "workspace-handoff", "workspace-picker", "vault-picker"])}${connectionPanel()}<section class="connection-flow"><article><span>01</span><h3>Connect Zotero Desktop</h3><p>Proofline checks the local Zotero API. Your Zotero username and password are never requested.</p></article><article><span>02</span><h3>Choose a library</h3><p>If several personal or group libraries contain papers, choose one and remember it for this project.</p></article><article><span>03</span><h3>Review real metadata</h3><p>Load top-level papers into the Library view with source IDs and a visible read-only boundary.</p></article></section>${linkedTools}<section class="workspace-setup"><div class="workspace-setup-head">${eyebrow("Working locations")}<h2>Start where your work lives.</h2><p>Choose an existing location or create one from here. Each connection stays local to this project.</p></div><div class="workspace-setup-grid"><article class="workspace-setup-card panel"><span class="workspace-setup-index">01</span><div class="integration-icon">⌘</div><span class="label">LOCAL CODE</span><h3>VS Code</h3><p>Open an existing project folder, or begin with a clean workspace for code and experiments.</p><div class="workspace-setup-actions">${button("Choose folder", "choose-vscode-folder", "dark")}${button("Create folder", "create-vscode-folder", "outline")}</div></article><article class="workspace-setup-card panel"><span class="workspace-setup-index">02</span><div class="integration-icon">O</div><span class="label">RESEARCH VAULT</span><h3>Obsidian</h3><p>Use an existing vault, or create a research structure with notes, implementation, and resources ready.</p><div class="workspace-setup-actions">${button("Choose vault", "choose-existing-vault", "dark")}${button("Create vault", "create-obsidian-vault", "outline")}</div></article><article class="workspace-setup-card panel"><span class="workspace-setup-index">03</span><div class="integration-icon">↗</div><span class="label">WRITING PROJECT</span><h3>Overleaf</h3><p>Create the project in Overleaf, then save its URL here. Proofline never signs in or syncs your files.</p><div class="workspace-setup-actions"><a class="button button-dark" href="https://www.overleaf.com/project" target="_blank" rel="noreferrer">Create ↗</a>${button("Add URL", "set-overleaf-url", "outline")}</div></article></div></section>`;
 }
 
 function settings() { return `<div class="page-intro compact">${eyebrow("Workspace / settings")}<h1>Keep the boundaries visible.</h1><p>These settings describe the baseline that is actually running.</p></div><section class="settings-list panel"><div class="setting-row"><div><strong>Local-first workspace</strong><p>Feedback and project labels are stored in this browser. Zotero is read through the local app server.</p></div><span class="toggle on"><i></i> On</span></div><div class="setting-row"><div><strong>Zotero write access</strong><p>This baseline cannot modify library items, notes, attachments, or collections.</p></div><span class="setting-value">Disabled</span></div><div class="setting-row"><div><strong>Project label</strong><p>${esc(state.project)}</p></div><button class="text-button" data-action="rename-project">Rename</button></div></section>`; }
 
-function about() { return `<div class="page-intro">${eyebrow("About / product promise")}<h1>Research without the black box.</h1><p>ThesisOS keeps thesis intent, supervisor feedback, proposed work, and selected evidence in one reviewable local trail.</p></div><section class="about-grid"><article class="panel"><span>01</span><h2>Understand the thesis</h2><p>Project documents and manuscript structure propose context for your approval.</p></article><article class="panel"><span>02</span><h2>Keep feedback intact</h2><p>The original comment stays beside every task created from it.</p></article><article class="panel"><span>03</span><h2>Approve every boundary</h2><p>Search is read-only. Writes require a separate, explicit decision.</p></article></section>`; }
+function about() { return `<div class="page-intro">${eyebrow("About / product promise")}<h1>Research that shows its work.</h1><p>Proofline keeps research intent, reviewer feedback, proposed work, and selected evidence in one reviewable local trail.</p></div><section class="about-grid"><article class="panel"><span>01</span><h2>Understand the research</h2><p>Project documents and manuscript structure propose context for your approval.</p></article><article class="panel"><span>02</span><h2>Keep feedback intact</h2><p>The original comment stays beside every task created from it.</p></article><article class="panel"><span>03</span><h2>Approve every boundary</h2><p>Search is read-only. Writes require a separate, explicit decision.</p></article></section>`; }
 
 function render() {
   if (!state.projectState) {
@@ -522,10 +536,10 @@ async function requestConnection(path, options) {
     if (!response.ok) throw new Error(payload.message || "The Zotero connection could not be completed.");
     applyConnection(payload);
     if (payload.status === "connected") completeActivity("Zotero is connected.", `${payload.paperCount || 0} bibliographic papers are available read-only.`);
-    else if (payload.status === "selection_required") completeActivity("Choose a Zotero library.", "ThesisOS found more than one available library.");
+    else if (payload.status === "selection_required") completeActivity("Choose a Zotero library.", "Proofline found more than one available library.");
     else failActivity(new Error(payload.message || "Zotero Desktop is not available."), "connect-zotero");
   } catch (error) {
-    const message = `The ThesisOS app server could not complete the connection: ${error.message}`;
+    const message = `The Proofline app server could not complete the connection: ${error.message}`;
     applyConnection({ status: "unavailable", mode: null, access: null, library: null, libraries: [], paperCount: 0, message });
     failActivity(new Error(message), "connect-zotero");
   }
@@ -565,14 +579,14 @@ function openTask(id) {
   modal.returnFocus = returnFocus;
   const canLaunchLiterature = task.kind === "literature" && state.connection.status === "connected";
   const modalCopy = canLaunchLiterature
-    ? "Approve this read-only literature task and ThesisOS will immediately search Zotero and open the results."
+    ? "Approve this read-only literature task and Proofline will immediately search Zotero and open the results."
     : "This proposed task traces back to the validated feedback artifact. Approval changes the task state; write integrations still require a separate approval.";
   const taskAction = task.approvalStatus === "pending"
     ? `${button(canLaunchLiterature ? "Approve & search Zotero →" : "Approve task", `approve-task:${task.id}`, "dark", state.workflowBusy)}${button("Reject", `reject-task:${task.id}`, "outline", state.workflowBusy)}`
     : task.approvalStatus === "approved" && task.kind === "literature"
       ? button(state.workflowBusy ? "Searching…" : "Search Zotero →", "search-zotero", "dark", state.workflowBusy || state.connection.status !== "connected")
       : `<span class="muted-action">Task ${esc(task.approvalStatus)}</span>`;
-  modal.innerHTML = `<section class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-title"><button class="modal-close" data-close-modal aria-label="Close">×</button><span class="label">${esc(task.kind)} task · ${esc(task.tool)}</span><h2 id="task-title">${esc(task.title)}</h2><p class="modal-copy">${modalCopy}</p>${sectionActivity(["task-review", "zotero-search"])}<div class="modal-detail"><span>Approval</span><strong class="${task.approvalStatus}">${statusLabel(task.approvalStatus)}</strong><span>Execution</span><strong>${task.kind === "literature" ? "Read-only Zotero search" : "Adapter not implemented"}</strong><span>Source</span><strong>User-provided supervisor feedback</strong></div>${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="modal-actions">${taskAction}<button class="text-button" data-close-modal>Close</button></div></section>`;
+  modal.innerHTML = `<section class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-title"><button class="modal-close" data-close-modal aria-label="Close">×</button><span class="label">${esc(task.kind)} task · ${esc(task.tool)}</span><h2 id="task-title">${esc(task.title)}</h2><p class="modal-copy">${modalCopy}</p>${sectionActivity(["task-review", "zotero-search"])}<div class="modal-detail"><span>Approval</span><strong class="${task.approvalStatus}">${statusLabel(task.approvalStatus)}</strong><span>Execution</span><strong>${task.kind === "literature" ? "Read-only Zotero search" : "Planned adapter · literature evidence is the submitted slice"}</strong><span>Source</span><strong>User-provided supervisor feedback</strong></div>${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<div class="modal-actions">${taskAction}<button class="text-button" data-close-modal>Close</button></div></section>`;
   modal.addEventListener("keydown", (event) => {
     if (event.key !== "Tab") return;
     const focusable = [...modal.querySelectorAll("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")];
@@ -589,6 +603,19 @@ function openTask(id) {
   });
   document.body.append(modal);
   modal.querySelector("[data-close-modal]")?.focus();
+}
+
+async function openTaskTool(taskOrTool) {
+  const tool = typeof taskOrTool === "string" ? taskOrTool : taskOrTool?.tool;
+  if (!["obsidian", "vscode", "overleaf"].includes(tool)) return;
+  const response = await fetch("/api/workspace/open", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tool })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.message || `Could not open ${tool}.`);
+  return payload;
 }
 
 async function handleAction(action) {
@@ -608,6 +635,47 @@ async function handleAction(action) {
       state = { ...structuredClone(defaultState), project: payload.state.project.name, projectState: payload.state, profileReadiness: payload.readiness, connection: payload.connection, papers: payload.connection.papers, view: "overview" };
       completeActivity("Demo restarted.", "Choose a feedback prompt to begin the guided workflow.");
     } catch (error) { failActivity(error, "restart-demo"); }
+    saveState();
+    return render();
+  }
+  if (action === "show-demo-proof") {
+    if (state.workflowBusy) return;
+    beginActivity("demo-proof", "Preparing the completed proof replay…", "Replaying the same approval-gated fixture workflow; no filesystem write occurs.", action);
+    try {
+      const response = await fetch("/api/demo/proof", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "The completed proof replay could not be prepared.");
+      state.project = payload.state.project.name;
+      state.projectState = payload.state;
+      state.profileReadiness = payload.readiness;
+      state.connection = payload.connection;
+      state.papers = payload.connection.papers;
+      state.feedbackThreadId = payload.proof.feedbackThreadId;
+      state.feedbackTitle = payload.state.feedbackThreads.find(({ id }) => id === payload.proof.feedbackThreadId)?.title || "Supervisor feedback";
+      state.feedback = payload.workflow.feedback;
+      applyCanonicalWorkflow(payload.workflow);
+      state.claimTraceback = payload.claimTraceback;
+      state.demoRejectionProof = null;
+      state.view = "notes";
+      completeActivity("Completed proof ready.", "Traceback now shows feedback → approval → selected evidence → grounded source note.");
+    } catch (error) { failActivity(error, action); }
+    saveState();
+    return render();
+  }
+  if (action === "test-demo-rejection") {
+    if (!state.notePreview || !state.evidenceRefs.length || state.workflowBusy) return;
+    beginActivity("demo-rejection", "Testing the citation boundary…", "Attempting to preview a draft with a source that was never selected.", action);
+    try {
+      const response = await fetch("/api/workflow/notes/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: state.project, feedback: state.feedback, evidenceRefs: state.evidenceRefs, draft: { overview: "Unsafe fixture draft", sourceNotes: [{ sourceId: "fixture:demo:UNSELECTED", summary: "This source was never selected.", relevance: "It must be rejected." }] } })
+      });
+      const payload = await response.json();
+      if (response.ok || !/unselected source/i.test(payload.message || "")) throw new Error("The citation-boundary proof did not reject the unselected source as expected.");
+      state.demoRejectionProof = "Unselected citation rejected by the grounded-note boundary.";
+      completeActivity("Citation boundary held.", "The preview refused the unselected fixture source before any note could be written.");
+    } catch (error) { failActivity(error, action); }
     saveState();
     return render();
   }
@@ -714,6 +782,58 @@ async function handleAction(action) {
   }
   if (action === "open-library") return setView("evidence");
   if (action === "open-evidence-notes") return setView("notes");
+  if (action.startsWith("open-workspace-tool:")) {
+    const tool = action.slice("open-workspace-tool:".length);
+    if (state.workflowBusy) return;
+    beginActivity("workspace-handoff", `Opening ${tool}…`, "Opening the configured workspace; Proofline is not writing any files.", action);
+    try {
+      const launched = await openTaskTool(tool);
+      completeActivity(`${launched.application} opened.`, "The linked workspace remains unchanged.");
+    } catch (error) { failActivity(error, action); }
+    saveState();
+    return render();
+  }
+  if (action.startsWith("open-task:")) return openTask(action.slice("open-task:".length));
+  if (action.startsWith("open-task-tool:")) {
+    const task = getTask(action.slice("open-task-tool:".length));
+    if (!task || state.workflowBusy) return;
+    beginActivity("workspace-handoff", `Opening ${task.tool}…`, "Opening the linked local workspace; Proofline is not writing any files.", action);
+    try {
+      const launched = await openTaskTool(task);
+      completeActivity(`${launched.application} opened.`, "The task remains approved in Proofline.");
+    } catch (error) {
+      failActivity(error, action);
+    }
+    saveState();
+    return render();
+  }
+  if (action.startsWith("approve-and-open:")) {
+    const taskId = action.slice("approve-and-open:".length);
+    const task = getTask(taskId);
+    if (!task || state.workflowBusy) return;
+    beginActivity("workspace-handoff", `Approving and opening ${task.tool}…`, "Saving your approval first, then opening the linked local workspace.", action);
+    try {
+      const response = await fetch("/api/workflow/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state.feedbackThreadId
+          ? { feedbackThreadId: state.feedbackThreadId, taskId, decision: "approved", expectedRevision: state.projectState.revision }
+          : { taskGraph: state.taskGraph, state: state.thesisState, taskId, decision: "approved" })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "The task could not be approved.");
+      state.taskGraph = payload.taskGraph;
+      state.thesisState = payload.state;
+      if (payload.state?.schemaVersion === 3) state.projectState = payload.state;
+      state.tasks = payload.taskGraph.tasks;
+      const launched = await openTaskTool(getTask(taskId));
+      completeActivity(`Approved and opened ${launched.application}.`, "No files were changed by Proofline.");
+    } catch (error) {
+      failActivity(error, action);
+    }
+    saveState();
+    return render();
+  }
   if (action === "open-literature-task") {
     const literatureTask = state.tasks.find((task) => task.kind === "literature");
     if (literatureTask) return openTask(literatureTask.id);
@@ -721,9 +841,54 @@ async function handleAction(action) {
   }
   if (action === "connect-zotero") return connectZotero();
   if (action === "use-demo-library") return connectDemoLibrary();
+  if (action === "choose-vscode-folder") {
+    if (state.workflowBusy) return;
+    beginActivity("workspace-picker", "Opening the VS Code folder picker…", "Choose the local folder you want VS Code to open for this project.", action);
+    try {
+      const response = await fetch("/api/workspace/pick", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "vscode", mode: "existing" }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "The VS Code folder could not be configured.");
+      state.projectState = payload.state;
+      state.profileReadiness = payload.readiness;
+      completeActivity("VS Code folder linked.", "It will open when you continue a VS Code task.");
+    } catch (error) { failActivity(error, action); }
+    saveState();
+    return render();
+  }
+  if (action === "create-vscode-folder") {
+    const name = window.prompt("New code folder name", `${state.project || "research"}-code`);
+    if (!name?.trim() || state.workflowBusy) return;
+    beginActivity("workspace-picker", "Opening the code workspace picker…", "Choose a parent folder; Proofline will create the named code folder inside it.", action);
+    try {
+      const response = await fetch("/api/workspace/pick", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "vscode", mode: "create", name: name.trim() }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "The code folder could not be created.");
+      state.projectState = payload.state;
+      state.profileReadiness = payload.readiness;
+      completeActivity("Code workspace created.", "A README was added and VS Code now opens this folder for the project.");
+    } catch (error) { failActivity(error, action); }
+    saveState();
+    return render();
+  }
+  if (action === "set-overleaf-url") {
+    const current = state.projectState?.project?.overleafUrl || "";
+    const overleafUrl = window.prompt("Overleaf project URL", current);
+    if (overleafUrl === null || state.workflowBusy || !state.projectState) return;
+    beginActivity("workspace-handoff", "Saving the Overleaf project URL…", "This stores a link only; it does not connect or sync Overleaf.", action);
+    try {
+      const response = await fetch("/api/project/paths", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ overleafUrl: overleafUrl.trim() || null, expectedRevision: state.projectState.revision }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "The Overleaf project URL could not be saved.");
+      state.projectState = payload.state;
+      state.profileReadiness = payload.readiness;
+      completeActivity(overleafUrl.trim() ? "Overleaf URL saved." : "Overleaf URL removed.", "Proofline will open it in your browser when requested.");
+    } catch (error) { failActivity(error, action); }
+    saveState();
+    return render();
+  }
   if (action === "choose-existing-vault" || action === "create-obsidian-vault" || action === "change-obsidian-vault") {
     const mode = action === "create-obsidian-vault" ? "create" : "existing";
-    const name = mode === "create" ? window.prompt("New vault name", state.project || "ThesisOS") : undefined;
+    const name = mode === "create" ? window.prompt("New vault name", state.project || "Proofline") : undefined;
     if (mode === "create" && !name?.trim()) return;
     beginActivity("vault-picker", "Opening the Obsidian vault picker…", "Choose an existing folder or create a new project vault.", action);
     try {
@@ -731,8 +896,10 @@ async function handleAction(action) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "The Obsidian vault could not be configured.");
       state.obsidianVaultPath = payload.vault.path;
+      if (payload.state?.schemaVersion === 3) state.projectState = payload.state;
+      if (payload.readiness) state.profileReadiness = payload.readiness;
       state.noteWrite = null;
-      completeActivity("Obsidian vault connected.", "Notes will be saved inside its Evidence folder.");
+      completeActivity(mode === "create" ? "Research vault created." : "Obsidian vault connected.", "Notes will be saved in its 10_Literature_Notes folder.");
     } catch (error) {
       failActivity(error, action);
     }

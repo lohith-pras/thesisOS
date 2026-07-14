@@ -89,58 +89,36 @@ try {
     console.log("Captured overview");
   }
 
-  await evaluate(call, "location.hash='overview'");
-  await waitUntil(call, "document.querySelector('#feedback-form') !== null");
-  await evaluate(call, `(() => { const form=document.querySelector('#feedback-form'); form.feedback.value='Review distributed ISAC literature, identify evidence for sensing coverage, and revise section 3.2.'; form.provider.value='codex'; form.requestSubmit(); return true; })()`);
-  await waitUntil(call, "document.querySelector('[data-task=\"task-literature\"]') !== null");
-  await waitUntil(call, "document.body.textContent.includes('offline-fallback')");
-  if (!VERIFY_ONLY) {
-    await screenshot(call, "judge-task-approval.png");
-    console.log("Captured task approval");
-  }
-
-  await evaluate(call, "document.querySelector('[data-task=\"task-literature\"]').click()");
-  await waitUntil(call, "document.querySelector('[data-action^=\"approve-task:\"]') !== null");
-  await evaluate(call, "document.querySelector('[data-action^=\"approve-task:\"]').click()");
-  await waitUntil(call, "fetch('/api/project').then(r => r.json()).then(p => p.state.feedbackThreads.at(-1)?.tasks.some(t => t.id === 'task-literature' && t.approvalStatus === 'approved'))");
-  await call("Page.reload", { ignoreCache: true });
-  await evaluate(call, "location.hash='tasks'");
-  await waitUntil(call, "document.querySelector('[data-task=\"task-literature\"].approved') !== null");
-  await evaluate(call, "document.querySelector('[data-task=\"task-literature\"].approved').click()");
-  await waitUntil(call, "document.querySelector('[data-action=\"search-zotero\"]') !== null");
-  await evaluate(call, "document.querySelector('[data-action=\"search-zotero\"]').click()");
-  await waitUntil(call, "document.querySelector('.retrieval-notice') !== null");
-  await waitUntil(call, "document.querySelector('.modal-backdrop') === null");
-  if (!VERIFY_ONLY) {
-    await screenshot(call, "judge-retrieval.png");
-    console.log("Captured retrieval");
-  }
-
-  const selectedSourceId = await evaluate(call, `(() => { const toggle=document.querySelector('[data-action^="toggle-evidence:"]'); const sourceId=toggle.dataset.action.slice('toggle-evidence:'.length); toggle.click(); return sourceId; })()`);
-  await waitUntil(call, "document.querySelector('[data-action=\"attach-evidence\"]:not([disabled])') !== null");
-  await evaluate(call, "document.querySelector('[data-action=\"attach-evidence\"]').click()");
-  await waitUntil(call, "document.querySelector('[data-action=\"draft-evidence-note\"]') !== null");
-  await evaluate(call, "document.querySelector('[data-action=\"draft-evidence-note\"]').click()");
+  await waitUntil(call, "document.querySelector('[data-action=\"show-demo-proof\"]') !== null");
+  await evaluate(call, "document.querySelector('[data-action=\"show-demo-proof\"]').click()");
   await waitUntil(call, "document.querySelector('.note-preview') !== null");
-  await waitUntil(call, `document.querySelector('.note-preview').textContent.includes(${JSON.stringify(selectedSourceId)})`);
-  await waitUntil(call, "document.querySelector('.note-preview').textContent.includes('demo-grounded-template')");
-  await evaluate(call, "document.querySelector('.note-preview').scrollTop=document.querySelector('.note-preview').scrollHeight");
+  await waitUntil(call, "document.querySelector('.claim-traceback-result') !== null");
+  await waitUntil(call, "document.querySelector('.claim-traceback-result').textContent.includes('Supervisor asked:')");
+  const selectedSourceId = await evaluate(call, "document.querySelector('.claim-traceback-result code').textContent");
   if (!VERIFY_ONLY) {
     await screenshotElement(call, ".note-workflow", "judge-grounded-note.png");
-    console.log("Captured grounded note");
+    await screenshotElement(call, ".claim-traceback", "judge-claim-traceback.png");
+    console.log("Captured grounded note and Claim Traceback");
+  }
+
+  await waitUntil(call, "document.querySelector('[data-action=\"test-demo-rejection\"]') !== null");
+  await evaluate(call, "document.querySelector('[data-action=\"test-demo-rejection\"]').click()");
+  await waitUntil(call, "document.querySelector('.demo-proof-status')?.textContent.includes('Unselected citation rejected')");
+  if (!VERIFY_ONLY) {
+    await screenshotElement(call, ".demo-guide", "judge-citation-rejection.png");
+    console.log("Captured citation rejection");
   }
 
   await call("Page.reload", { ignoreCache: true });
   await evaluate(call, "location.hash='notes'");
   await waitUntil(call, "document.querySelector('.note-preview') !== null");
-  await waitUntil(call, `document.querySelector('.note-preview').textContent.includes(${JSON.stringify(selectedSourceId)})`);
-  await waitUntil(call, "document.querySelector('.note-preview').textContent.includes('demo-grounded-template')");
+  await waitUntil(call, "document.querySelector('.claim-traceback') !== null");
   socket.close();
 
   if (VERIFY_ONLY) {
-    console.log(`Browser happy path passed with ${selectedSourceId}: feedback → approval → retrieval → evidence → grounded draft → reload.`);
+    console.log(`Browser proof replay passed with ${selectedSourceId}: feedback → approval → selected evidence → grounded draft → Claim Traceback → citation rejection → reload.`);
   } else {
-    const frames = ["judge-overview.png", "judge-task-approval.png", "judge-retrieval.png", "judge-grounded-note.png"].map((name) => resolve(ASSETS, name));
+    const frames = ["judge-overview.png", "judge-grounded-note.png", "judge-claim-traceback.png", "judge-citation-rejection.png"].map((name) => resolve(ASSETS, name));
     const normalizedFrames = frames.flatMap((frame) => ["(", frame, "-resize", "1200x675", "-background", "#f7f8f5", "-gravity", "center", "-extent", "1200x675", ")"]);
     const imageMagick = spawnSync("magick", ["-delay", "180", ...normalizedFrames, "-loop", "0", resolve(ASSETS, "thesisos-hero.gif")], { encoding: "utf8" });
     if (imageMagick.status !== 0) throw new Error(imageMagick.stderr || "ImageMagick failed to create the hero GIF.");

@@ -26,6 +26,16 @@ test("generated evidence notes include a structured read model alongside Markdow
   assert.equal(preview.readModel.synthesis.styleReview.passed, true);
 });
 
+test("generated literature notes are stable for one feedback thread and distinct across feedback", () => {
+  const reference = demoLibraryPayload().papers[0];
+  const first = createObsidianNotePreview({ project: "EV flexibility", feedback: "Qualify the congestion claim.", evidenceRefs: [reference] });
+  const repeat = createObsidianNotePreview({ project: "EV flexibility", feedback: "Qualify the congestion claim.", evidenceRefs: [reference] });
+  const second = createObsidianNotePreview({ project: "EV flexibility", feedback: "Explain the vehicle availability assumption.", evidenceRefs: [reference] });
+  assert.equal(first.filename, repeat.filename);
+  assert.notEqual(first.filename, second.filename);
+  assert.match(first.filename, /^literature-evidence--.+--[a-f0-9]{10}\.md$/);
+});
+
 test("demo drafting gives each selected paper a distinct, feedback-relevant role", () => {
   const papers = demoLibraryPayload().papers;
   const draft = createDemoGroundedDraft("The congestion claim is too strong.", [papers[0], papers[3], papers[1]]);

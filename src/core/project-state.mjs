@@ -134,6 +134,7 @@ export function validateProjectState(state) {
   requireText(state.project?.name, "Project name");
   if (state.project?.thesisDir !== null) requireText(state.project?.thesisDir, "Thesis directory");
   if (state.project?.vaultPath !== null) requireText(state.project?.vaultPath, "Vault path");
+  if (state.project?.overleafUrl !== null && state.project?.overleafUrl !== undefined) requireText(state.project?.overleafUrl, "Overleaf URL");
   if (!Array.isArray(state.claims) || !Array.isArray(state.events)) throw new Error("Project claims and events must be arrays.");
   if (!state.profile || typeof state.profile !== "object") throw new Error("Project profile must be an object.");
   if (!Array.isArray(state.documents)) throw new Error("Project documents must be an array.");
@@ -158,7 +159,7 @@ export function validateProjectState(state) {
   return state;
 }
 
-export function createProjectState({ project, thesisDir, vaultPath }, options = {}) {
+export function createProjectState({ project, thesisDir, vaultPath, overleafUrl }, options = {}) {
   const now = options.now ?? new Date().toISOString();
   return validateProjectState({
     schemaVersion: 3,
@@ -166,7 +167,8 @@ export function createProjectState({ project, thesisDir, vaultPath }, options = 
     project: {
       name: requireText(project, "Project name"),
       thesisDir: thesisDir ? requireText(thesisDir, "Thesis directory") : null,
-      vaultPath: vaultPath ? requireText(vaultPath, "Vault path") : null
+      vaultPath: vaultPath ? requireText(vaultPath, "Vault path") : null,
+      overleafUrl: overleafUrl ? requireText(overleafUrl, "Overleaf URL") : null
     },
     feedbackThreads: [],
     profile: { objectives: [], problems: [], deliverables: [], deadlines: [], supervisorExpectations: [], seedReferences: [] },
@@ -182,13 +184,14 @@ export function createProjectState({ project, thesisDir, vaultPath }, options = 
 }
 
 export function migrateProjectState(state, options = {}) {
-  if (state?.schemaVersion === 3) return validateProjectState({ ...state, evidence: state.evidence ?? [] });
+  if (state?.schemaVersion === 3) return validateProjectState({ ...state, evidence: state.evidence ?? [], project: { ...state.project, overleafUrl: state.project?.overleafUrl ?? null } });
   if (state?.schemaVersion !== 2) throw new Error(`Unsupported project state schema version '${state?.schemaVersion}'.`);
   const now = options.now ?? new Date().toISOString();
   return validateProjectState({
     ...state,
     schemaVersion: 3,
     revision: 1,
+    project: { ...state.project, overleafUrl: state.project?.overleafUrl ?? null },
     profile: { objectives: [], problems: [], deliverables: [], deadlines: [], supervisorExpectations: [], seedReferences: [] },
     profileProposal: null,
     documents: [],
@@ -211,6 +214,11 @@ export async function saveProjectState(path, state) {
 }
 
 function expectRevision(state, expectedRevision) {
+  if (expectedRevision === undefined || expectedRevision === null) {
+    const error = new Error("REVISION_REQUIRED: include expectedRevision from GET /api/project before changing this workspace.");
+    error.code = "REVISION_REQUIRED";
+    throw error;
+  }
   if (expectedRevision !== state.revision) {
     const error = new Error(`STATE_STALE: expected revision ${expectedRevision}, current revision is ${state.revision}.`);
     error.code = "STATE_STALE";
@@ -343,7 +351,8 @@ export function updateProjectPaths(state, input, options = {}) {
   const project = {
     ...state.project,
     ...(input.thesisDir !== undefined ? { thesisDir: input.thesisDir ? requireText(input.thesisDir, "Thesis directory") : null } : {}),
-    ...(input.vaultPath !== undefined ? { vaultPath: input.vaultPath ? requireText(input.vaultPath, "Vault path") : null } : {})
+    ...(input.vaultPath !== undefined ? { vaultPath: input.vaultPath ? requireText(input.vaultPath, "Vault path") : null } : {}),
+    ...(input.overleafUrl !== undefined ? { overleafUrl: input.overleafUrl ? requireText(input.overleafUrl, "Overleaf URL") : null } : {})
   };
   return validateProjectState({
     ...state,

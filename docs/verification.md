@@ -60,4 +60,4 @@ OPENAI_API_KEY="your-key" npm run demo -- --ai \
 
 ## Manual website smoke test
 
-Run `npm run app -- --demo` and verify: task approval, rejected-task refusal, semantic retrieval notice, evidence selection, navigation to Evidence notes, Codex drafting or local fallback, preview, and judge-mode write refusal.
+Run `npm run app -- --demo` and verify: task approval, rejected-task refusal, semantic retrieval notice, evidence selection, navigation to Evidence notes, Codex drafting or local fallback, preview, and judge-mode write refusal. For a deterministic short path, select **Show completed proof** and verify that Claim Traceback links source note → selected evidence → approved task → feedback. Then select **Test citation boundary** and verify that the preview rejects the deliberately unselected fixture source.

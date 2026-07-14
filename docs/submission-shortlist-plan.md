@@ -1,17 +1,17 @@
-# ThesisOS Shortlist Plan
+# Proofline Shortlist Plan
 
 Status: active submission-hardening plan.
 
 ## Decision on GPT-5.6
 
-The submission requirement is best read as: build the project **using Codex with GPT-5.6**, then show and document that build process. It does not clearly require ThesisOS to call GPT-5.6 at runtime.
+The submission requirement is best read as: build the project **using Codex with GPT-5.6**, then show and document that build process. It does not clearly require Proofline to call GPT-5.6 at runtime.
 
 The primary build session is verified as GPT-5.6 and its feedback was submitted. The build and feedback ID is `019f5cc1-08be-7071-a5ea-220a8de0f313`; the receipt is preserved at [`docs/assets/codex-feedback-receipt.png`](assets/codex-feedback-receipt.png). The submission should show concrete contributions from that session: the Zotero-to-evidence workflow, semantic retrieval and evaluation, grounded drafting, judge mode, and automated verification.
 
 Keep these two claims separate:
 
-- Build-time: ThesisOS was designed and implemented with Codex using GPT-5.6.
-- Runtime: ThesisOS uses a swappable provider seam; Codex CLI is the default path and other providers are optional.
+- Build-time: Proofline was designed and implemented with Codex using GPT-5.6.
+- Runtime: Proofline uses a swappable provider seam; Codex CLI is the default path and other providers are optional.
 
 Do not present an optional GPT-5.6 API adapter as the main evidence for eligibility.
 
@@ -30,28 +30,28 @@ Official references:
 
 ### One memorable idea
 
-**ThesisOS is AI that is not allowed to write until the researcher approves both the task and the evidence.**
+**Proofline is AI that is not allowed to write until the researcher approves both the task and the evidence.**
 
-That is stronger than positioning ThesisOS as a generic AI research assistant, multi-agent system, paper summarizer, or thesis-writing tool.
+That is stronger than positioning Proofline as a generic AI research assistant, multi-agent system, paper summarizer, or thesis-writing tool.
 
 Suggested title and tagline:
 
-- Title: **ThesisOS**
-- Tagline: **Evidence before AI writing.**
-- Descriptive alternative: **Turn supervisor feedback into source-locked thesis revisions.**
+- Title: **Proofline**
+- Tagline: **Research that shows its work.**
+- Descriptive alternative: **Turn reviewer feedback into source-locked research revisions.**
 
 Suggested opening:
 
-> ThesisOS is research change control for thesis students. It turns supervisor feedback into a reviewable task, retrieves candidate papers from the student's own Zotero library, and refuses to draft until the researcher approves both the task and the evidence.
+> Proofline is research change control. It turns reviewer feedback into a reviewable task, retrieves candidate papers from the researcher's own Zotero library, and refuses to draft until the researcher approves both the task and the evidence.
 
 ### Why this can differentiate
 
-Most research assistants optimize for producing more text. ThesisOS should be framed as optimizing for evidence custody, explicit approval, and traceable revision. The refusal state is not an error; it is the product demonstration.
+Most research assistants optimize for producing more text. Proofline should be framed as optimizing for evidence custody, explicit approval, and traceable revision. The refusal state is not an error; it is the product demonstration.
 
 The strongest competitive contrast is:
 
 - Generic tools: prompt -> generated answer.
-- ThesisOS: feedback -> approved task -> reviewed evidence -> grounded draft -> vault artifact.
+- Proofline: feedback -> approved task -> reviewed evidence -> grounded draft -> vault artifact.
 
 ## Stage One: survive the viability screen
 

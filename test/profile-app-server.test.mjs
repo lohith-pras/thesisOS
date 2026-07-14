@@ -76,6 +76,35 @@ test("links and scans an optional manuscript after project creation", async () =
   });
 });
 
+test("opens only the configured Obsidian vault or VS Code manuscript folder", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-workspace-launch-"));
+  const thesisDir = join(projectDir, "thesis");
+  const vaultPath = join(projectDir, "vault");
+  await mkdir(thesisDir);
+  await mkdir(vaultPath);
+  const launches = [];
+  const urls = [];
+  await withServer({
+    projectDir,
+    launchWorkspaceApp: async (application, path) => launches.push({ application, path }),
+    launchExternalUrl: async (url) => urls.push(url)
+  }, async (base) => {
+    let project = await post(base, "/api/project/init", { project: "ISAC thesis", thesisDir, vaultPath });
+    project = await post(base, "/api/project/paths", { overleafUrl: "https://www.overleaf.com/project/example", expectedRevision: project.body.state.revision });
+    const obsidian = await post(base, "/api/workspace/open", { tool: "obsidian" });
+    const vscode = await post(base, "/api/workspace/open", { tool: "vscode" });
+    const overleaf = await post(base, "/api/workspace/open", { tool: "overleaf" });
+    assert.equal(obsidian.response.status, 200);
+    assert.equal(vscode.response.status, 200);
+    assert.equal(overleaf.response.status, 200);
+    assert.deepEqual(launches, [
+      { application: "Obsidian", path: vaultPath },
+      { application: "Visual Studio Code", path: thesisDir }
+    ]);
+    assert.deepEqual(urls, ["https://www.overleaf.com/project/example"]);
+  });
+});
+
 test("uploads a project document selected from the browser", async () => {
   const projectDir = await mkdtemp(join(tmpdir(), "thesisos-upload-document-"));
   await withServer({ projectDir }, async (base) => {

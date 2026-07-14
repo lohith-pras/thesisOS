@@ -2,6 +2,18 @@ import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promi
 import { isAbsolute, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
+const STARTER_FOLDERS = [
+  "00_Inbox",
+  "00_Meta",
+  "05_Daily_Notes",
+  "10_Literature_Notes",
+  "20_Concept_Notes",
+  "30_Problem_Formulation",
+  "40_Implementation",
+  "50_Resources/Scripts",
+  "Diagrams"
+];
+
 function runPicker(command, args) {
   return new Promise((resolvePicker, rejectPicker) => {
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -20,7 +32,7 @@ function runPicker(command, args) {
 }
 
 export async function pickFolder(mode = "existing") {
-  const prompt = mode === "create" ? "Choose where to create the ThesisOS vault" : "Choose an Obsidian vault";
+  const prompt = mode === "create" ? "Choose where to create the Proofline vault" : mode === "vscode" ? "Choose a folder to open in VS Code" : mode === "code-create" ? "Choose where to create the code workspace" : "Choose an Obsidian vault";
   if (process.platform === "darwin") return runPicker("osascript", ["-e", `POSIX path of (choose folder with prompt ${JSON.stringify(prompt)})`]);
   if (process.platform === "linux") return runPicker("zenity", ["--file-selection", "--directory", `--title=${prompt}`]);
   if (process.platform === "win32") {
@@ -70,13 +82,22 @@ export async function saveObsidianVault(projectDir, vaultPath) {
   return vaultPath;
 }
 
+export async function scaffoldObsidianVault(vaultPath, name = "Proofline") {
+  const root = resolve(vaultPath);
+  await Promise.all([mkdir(join(root, ".obsidian"), { recursive: true }), ...STARTER_FOLDERS.map((folder) => mkdir(join(root, folder), { recursive: true }))]);
+  const home = `---\ntitle: ${JSON.stringify(name)}\nmanaged_by: proofline\n---\n\n# ${name}\n\nA local research workspace.\n\n- [[00_Inbox]]\n- [[10_Literature_Notes]]\n- [[20_Concept_Notes]]\n- [[30_Problem_Formulation]]\n- [[40_Implementation]]\n`;
+  try { await writeFile(join(root, "_Home.md"), home, { encoding: "utf8", flag: "wx" }); }
+  catch (error) { if (error.code !== "EEXIST") throw error; }
+  return root;
+}
+
 export async function chooseObsidianVault(projectDir, { mode = "existing", name } = {}) {
   const selected = await pickFolder(mode);
   let vaultPath = selected;
   if (mode === "create") {
-    const vaultName = typeof name === "string" && name.trim() ? name.trim() : "ThesisOS";
+    const vaultName = typeof name === "string" && name.trim() ? name.trim() : "Proofline";
     vaultPath = resolve(selected, vaultName);
-    await mkdir(join(vaultPath, ".obsidian"), { recursive: true });
+    await scaffoldObsidianVault(vaultPath, vaultName);
   }
   const status = await inspectObsidianVault(vaultPath);
   if (!status.exists) throw new Error("The selected folder does not exist.");

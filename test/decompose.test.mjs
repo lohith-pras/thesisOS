@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { decomposeFeedback } from "../src/core/decompose.mjs";
@@ -13,7 +13,7 @@ import { parseReviewArgs } from "../src/review-cli.mjs";
 import { decomposeFeedbackWithCodex, draftEvidenceNoteWithCodex } from "../src/core/codex.mjs";
 import { extractLiteratureQuery, listZoteroPapers, resolveZoteroLibrary, searchZotero } from "../src/core/zotero.mjs";
 import { parseZoteroArgs } from "../src/zotero-cli.mjs";
-import { inspectObsidianVault } from "../src/core/obsidian-vault.mjs";
+import { inspectObsidianVault, scaffoldObsidianVault } from "../src/core/obsidian-vault.mjs";
 
 test("decomposes supervisor feedback into a cross-tool task graph", () => {
   const graph = decomposeFeedback(
@@ -54,6 +54,18 @@ test("accepts a Markdown folder as an existing Obsidian vault", async () => {
     assert.equal(status.hasObsidianConfig, false);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("scaffolds a new research vault without requiring a manuscript checkout", async () => {
+  const root = await mkdtemp(join(tmpdir(), "proofline-vault-"));
+  try {
+    await scaffoldObsidianVault(root, "ISAC workspace");
+    const folders = await readdir(root);
+    for (const name of [".obsidian", "00_Inbox", "00_Meta", "05_Daily_Notes", "10_Literature_Notes", "20_Concept_Notes", "30_Problem_Formulation", "40_Implementation", "50_Resources", "Diagrams"]) assert.ok(folders.includes(name), `missing ${name}`);
+    assert.match(await readFile(join(root, "_Home.md"), "utf8"), /ISAC workspace/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

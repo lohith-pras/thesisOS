@@ -2,7 +2,7 @@
 
 ## Project name
 
-ThesisOS
+Proofline
 
 ## Tagline
 
@@ -20,7 +20,7 @@ The submitted feedback receipt is preserved at [`docs/assets/codex-feedback-rece
 
 ## What it does
 
-A supervisor says, “Section 3.2 needs stronger evidence,” but the relevant papers rarely use the same wording. ThesisOS turns that comment into reviewable tasks, searches the student's selected Zotero library, and asks the researcher which papers truly count as evidence. It then drafts a grounded literature note whose citations must match those selected Zotero source IDs; a draft containing an unknown source ID is rejected. Claim Traceback follows a grounded source note back to its selected evidence, approved task, and original feedback. Finally, it exports a Revision Response Matrix a supervisor can read: comment, task, researcher decision, selected sources, and grounded-note status. Every write remains a separate approval.
+A reviewer says, “Section 3.2 needs stronger evidence,” but the relevant papers rarely use the same wording. Proofline turns that comment into reviewable tasks, searches the researcher's selected Zotero library, and asks which papers truly count as evidence. It then drafts a grounded literature note whose citations must match those selected Zotero source IDs; a draft containing an unknown source ID is rejected. Claim Traceback follows a grounded source note back to its selected evidence, approved task, and original feedback. Finally, it exports a Revision Response Matrix a reviewer can read: comment, task, researcher decision, selected sources, and grounded-note status. Every write remains a separate approval.
 
 ## How we built it
 
@@ -28,7 +28,7 @@ The project is a Node.js local-first application. Codex CLI turns messy feedback
 
 ## How Codex helped
 
-ThesisOS was designed and implemented with Codex using GPT-5.6. In the primary build session, Codex implemented and debugged the Zotero-to-evidence workflow, separated semantic retrieval from the Zotero transport, added local fallback and retrieval evaluation, built approval-gated grounded drafting with citation validation, created deterministic judge mode, and verified the result through automated tests. The semantic-retrieval work from this session was merged in commit `85067b1`. The verified build and feedback ID is included above for judging.
+Proofline was designed and implemented with Codex using GPT-5.6. In the primary build session, Codex implemented and debugged the Zotero-to-evidence workflow, separated semantic retrieval from the Zotero transport, added local fallback and retrieval evaluation, built approval-gated grounded drafting with citation validation, created deterministic judge mode, and verified the result through automated tests. The semantic-retrieval work from this session was merged in commit `85067b1`. The verified build and feedback ID is included above for judging.
 
 ## How Codex and GPT-5.6 are used
 
@@ -41,6 +41,7 @@ Natural supervisor language rarely matches paper titles, and Zotero libraries ma
 ## Accomplishments
 
 - One-command judge mode with no Zotero, Ollama, API key, or filesystem writes.
+- A completed-proof replay that lands directly on Claim Traceback, plus a visible unselected-citation rejection check.
 - Real 40-paper group-library integration.
 - Recall@5 of 0.83 on a small five-query, hand-labelled regression fixture; this is not presented as a general performance claim.
 - Stable evidence provenance from Zotero through grounded note preview.
@@ -52,7 +53,7 @@ The strongest research agent is not the one that acts most autonomously. It is t
 
 ## What's next
 
-After the submission baseline, ThesisOS can add PDF full-text extraction for missing abstracts, user-maintained relevance judgments, reviewable thesis-state diffs, and local Git/Overleaf patch adapters.
+After the submission baseline, Proofline can add PDF full-text extraction for missing abstracts, user-maintained relevance judgments, reviewable project-state diffs, and local Git/Overleaf patch adapters.
 
 ## Testing instructions
 
@@ -60,4 +61,4 @@ After the submission baseline, ThesisOS can add PDF full-text extraction for mis
 npm run app -- --demo
 ```
 
-Open `http://127.0.0.1:4173`. The demo is clearly labelled and stops at preview. For the full local path, run `npm run app` with Zotero Desktop open. Run `npm test` for the current test suite and `npm run eval:retrieval` for the live retrieval report.
+Open `http://127.0.0.1:4173`. The demo is clearly labelled and stops at preview. Select **Show completed proof** to open a deterministic completed trail, then **Test citation boundary** to see an unselected source rejected before note preview. For the full local path, run `npm run app` with Zotero Desktop open. Run `npm test` for the current test suite and `npm run eval:retrieval` for the live retrieval report.
