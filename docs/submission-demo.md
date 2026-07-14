@@ -15,8 +15,8 @@ Open `http://127.0.0.1:4173`.
 3. **Refusal (0:50–1:05):** Reject the literature task. Show that no search action is available. Recreate/approve it for the remainder of the demo.
 4. **Grounded retrieval (1:05–1:40):** Search the fixture or live Zotero library. Point out semantic/metadata mode, abstract coverage, relevance threshold, match score, source ID, and metadata-only warnings.
 5. **Evidence boundary (1:40–2:05):** Select one or two reviewed papers and attach them. Explain that only selected stable source IDs can enter drafting.
-6. **GPT-5.6 and fallback (2:05–2:35):** Click “Approve GPT-5.6 draft.” Show the external-processing disclosure, grounded source-ID citations, provider label, and deterministic fallback when no API key is configured.
-7. **Write boundary (2:35–2:50):** Show that judge mode stops at preview. In the live path, explain that Obsidian writing requires separate approval and refuses overwrite.
+6. **Codex grounded drafting (2:05–2:35):** Continue to the Evidence notes page and click “Draft with Codex CLI.” Show the local-session disclosure, grounded source-ID citations, provider label, and deterministic fallback when Codex is unavailable. Mention GPT-5.6 remains an optional API adapter.
+7. **Write boundary (2:35–2:50):** Preview the note, then show that judge mode stops there. In the live path, explain that Obsidian writing requires separate approval and updates only ThesisOS-managed notes.
 8. **Close (2:50–3:00):** ThesisOS turns feedback into a reviewable, evidence-backed research trail without hiding retrieval quality or write authority.
 
 ## Required capture checklist
@@ -24,11 +24,11 @@ Open `http://127.0.0.1:4173`.
 - [x] README hero GIF showing feedback → approval → retrieval → grounded preview (`docs/assets/thesisos-hero.gif`).
 - [ ] Screenshot: Codex task graph from messy supervisor feedback.
 - [x] Screenshot: judge retrieval results with abstract coverage, threshold, fallback mode, and match provenance (`docs/assets/judge-retrieval.png`).
-- [ ] Screenshot: GPT-5.6 grounded note with stable source-ID citations.
+- [ ] Screenshot: Codex grounded note with stable source-ID citations.
 - [ ] Screenshot/video moment: rejected task cannot search (include during the narrated recording).
-- [ ] Public YouTube video under three minutes with voiceover.
-- [ ] Add the main Codex `/feedback` session ID to the submission.
-- [ ] Verify and select the Education track on the live submission form.
+- [ ] Upload `docs/assets/thesisos-demo.mp4` as a public YouTube video under three minutes.
+- [x] Main Codex `/feedback` session ID recovered: `019f5cc1-08be-7071-a5ea-220a8de0f313`.
+- [x] Education track verified on the [official Build Week page](https://openai.devpost.com/); select it on the authenticated submission form.
 - [ ] Confirm repository visibility and final `main` commit.
 
 The unchecked items require the submitter's recording, account, session ID, and Devpost access; they cannot be generated or submitted by the application itself.

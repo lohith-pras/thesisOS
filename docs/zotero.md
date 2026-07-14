@@ -1,0 +1,47 @@
+# Zotero integration
+
+ThesisOS uses Zotero Desktop’s local API in read-only mode. It never imports, edits, deletes, or reorganizes Zotero items.
+
+## Desktop setup
+
+1. Open Zotero Desktop.
+2. Enable **Settings → Advanced → Allow other applications on this computer to communicate with Zotero**.
+3. Start ThesisOS with `npm run app`.
+
+The app discovers personal and group libraries and loads top-level bibliographic items. Notes, attachments, and annotations are excluded.
+
+## Library selection
+
+ThesisOS automatically selects a library when exactly one non-empty library is available. If multiple libraries contain papers, it shows a catalog instead of guessing.
+
+Select one library from the CLI:
+
+```bash
+npm run zotero -- --list --library isac_project_thesis
+npm run zotero -- --list --library 6568124
+```
+
+Use explicit group selection for scripts:
+
+```bash
+npm run zotero -- --list --library-type group --library-id 6568124
+```
+
+The selected library is persisted in the project’s `.thesisos.json` and reused on later runs.
+
+## Multiple libraries
+
+Intentionally include every non-empty library with:
+
+```bash
+npm run zotero -- --list --all-libraries
+npm run zotero -- --input-dir ./demo-output/run --all-libraries
+```
+
+Results retain `sourceId`, `sourceLibrary`, and the original Zotero item key, so equal keys in different libraries remain distinct.
+
+Supported environment overrides include `ZOTERO_LIBRARY_TYPE`, `ZOTERO_LIBRARY_ID`, and `ZOTERO_USER_ID` for web-mode scripts.
+
+## Website flow
+
+The website requires an approved literature task before search. Search results preserve title, authors, venue, abstract, tags, DOI, match score, retrieval reasons, and stable source IDs. Selecting evidence does not write to Zotero.

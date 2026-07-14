@@ -7,12 +7,13 @@ import { decomposeFeedback } from "../src/core/decompose.mjs";
 import { validateTaskGraph, validateThesisState } from "../src/core/schema.mjs";
 import { createThesisState } from "../src/core/state.mjs";
 import { parseCliArgs } from "../src/cli.mjs";
-import { decomposeFeedbackWithOpenAI } from "../src/core/openai.mjs";
+import { decomposeFeedbackWithOpenAI, TASK_GRAPH_SCHEMA } from "../src/core/openai.mjs";
 import { applyReviewDecisions } from "../src/core/review.mjs";
 import { parseReviewArgs } from "../src/review-cli.mjs";
-import { decomposeFeedbackWithCodex } from "../src/core/codex.mjs";
+import { decomposeFeedbackWithCodex, draftEvidenceNoteWithCodex } from "../src/core/codex.mjs";
 import { extractLiteratureQuery, listZoteroPapers, resolveZoteroLibrary, searchZotero } from "../src/core/zotero.mjs";
 import { parseZoteroArgs } from "../src/zotero-cli.mjs";
+import { inspectObsidianVault } from "../src/core/obsidian-vault.mjs";
 
 test("decomposes supervisor feedback into a cross-tool task graph", () => {
   const graph = decomposeFeedback(
@@ -26,6 +27,34 @@ test("decomposes supervisor feedback into a cross-tool task graph", () => {
   assert.deepEqual(graph.tasks[3].dependsOn, ["task-thesis"]);
   assert.equal(graph.schemaVersion, 1);
   assert.equal(validateTaskGraph(graph), graph);
+});
+
+test("offline fallback keeps approved objective and location references", () => {
+  const graph = decomposeFeedback("Strengthen Section 3.2.", { context: { objectives: [{ id: "o1" }], targetLocations: [{ id: "section-3-2" }] } });
+  assert.ok(graph.tasks.every((task) => task.objectiveIds.includes("o1")));
+  assert.ok(graph.tasks.every((task) => task.targetLocationIds.includes("section-3-2")));
+});
+
+test("adds a literature task for evidence-bearing thesis assumptions", () => {
+  const graph = decomposeFeedback("Interference mitigation is an assumption.");
+
+  assert.deepEqual(graph.tasks.map((task) => task.kind), ["literature", "notes", "thesis"]);
+  assert.deepEqual(graph.tasks[1].dependsOn, ["task-literature"]);
+  assert.deepEqual(graph.tasks[2].dependsOn, ["task-literature", "task-notes"]);
+});
+
+test("accepts a Markdown folder as an existing Obsidian vault", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "thesisos-markdown-vault-"));
+  try {
+    await writeFile(join(directory, "existing-note.md"), "# Existing note\n");
+    const status = await inspectObsidianVault(directory);
+    assert.equal(status.exists, true);
+    assert.equal(status.isVault, true);
+    assert.equal(status.hasMarkdown, true);
+    assert.equal(status.hasObsidianConfig, false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("validates the generated thesis state", () => {
@@ -115,6 +144,75 @@ test("normalizes and validates Codex CLI structured output", async () => {
   assert.equal(invocation.cwd, "/tmp/test-project");
   assert.equal(invocation.schema.additionalProperties, false);
   assert.match(invocation.prompt, /Supervisor feedback:/);
+});
+
+test("threads approved thesis context into both model decomposition adapters", async () => {
+  const context = { title: "Cognitive ISAC", selectedScope: { id: "p2", name: "Interference Mitigation" }, objectives: [{ id: "o1", text: "Develop online optimization" }], targetLocations: [{ id: "section-3-2", title: "Interference model" }] };
+  let codexPrompt = "";
+  await decomposeFeedbackWithCodex("Strengthen Section 3.2.", {
+    context,
+    invokeCodex: async ({ prompt }) => {
+      codexPrompt = prompt;
+      return { tasks: [{ id: "task-thesis", kind: "thesis", title: "Strengthen the interference model", tool: "overleaf", status: "ready", dependsOn: [], evidence: [] }], nextAction: "Review" };
+    }
+  });
+  assert.match(codexPrompt, /Cognitive ISAC/);
+
+  let request;
+  await decomposeFeedbackWithOpenAI("Strengthen Section 3.2.", {
+    context,
+    apiKey: "test",
+    fetchImpl: async (_url, init) => {
+      request = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ status: "completed", output_text: JSON.stringify({ tasks: [{ id: "task-thesis", kind: "thesis", title: "Strengthen the interference model", tool: "overleaf", status: "ready", dependsOn: [], evidence: [] }], nextAction: "Review" }) }) };
+    }
+  });
+  assert.match(JSON.stringify(request.input), /Cognitive ISAC/);
+});
+
+test("validates and preserves canonical objective and manuscript location references", async () => {
+  assert.ok(TASK_GRAPH_SCHEMA.properties.tasks.items.properties.objectiveIds);
+  assert.ok(TASK_GRAPH_SCHEMA.properties.tasks.items.properties.targetLocationIds);
+  const graph = await decomposeFeedbackWithCodex("Strengthen Section 3.2.", {
+    invokeCodex: async () => ({ tasks: [{ id: "task-thesis", kind: "thesis", title: "Strengthen the model", tool: "overleaf", status: "ready", dependsOn: [], evidence: [], objectiveIds: ["o1"], targetLocationIds: ["section-3-2"] }], nextAction: "Review" })
+  });
+  assert.deepEqual(graph.tasks.find(({ id }) => id === "task-thesis").objectiveIds, ["o1"]);
+  assert.deepEqual(graph.tasks.find(({ id }) => id === "task-thesis").targetLocationIds, ["section-3-2"]);
+});
+
+test("adds a literature prerequisite when Codex returns a thesis revision without Zotero", async () => {
+  const graph = await decomposeFeedbackWithCodex("Interference mitigation is an assumption.", {
+    invokeCodex: async () => ({
+      tasks: [
+        { id: "task-notes", kind: "notes", title: "Record the assumption", tool: "obsidian", status: "ready", dependsOn: [], evidence: ["Record the assumption"] },
+        { id: "task-thesis", kind: "thesis", title: "Revise the thesis text", tool: "overleaf", status: "blocked", dependsOn: ["task-notes"], evidence: ["Revise the text"] }
+      ],
+      nextAction: "Record the assumption"
+    })
+  });
+
+  assert.equal(graph.tasks[0].id, "task-literature");
+  assert.deepEqual(graph.tasks[1].dependsOn, ["task-literature"]);
+  assert.deepEqual(graph.tasks[2].dependsOn, ["task-literature", "task-notes"]);
+});
+
+test("drafts a grounded note through the authenticated Codex CLI adapter", async () => {
+  let invocation;
+  const evidenceRefs = [{ sourceId: "group:1:A", title: "Paper A", abstract: "Evidence", tags: ["radar"], doi: null }];
+  const draft = await draftEvidenceNoteWithCodex({ feedback: "Review Paper A.", evidenceRefs, approvedExternalProcessing: true }, {
+    model: "test-model",
+    cwd: "/tmp/test-project",
+    invokeCodex: async (options) => {
+      invocation = options;
+      return { overview: "Grounded overview", sourceNotes: [{ sourceId: "group:1:A", summary: "Paper summary", relevance: "Relevant" }] };
+    }
+  });
+
+  assert.equal(draft.provider, "codex");
+  assert.equal(draft.model, "test-model");
+  assert.equal(invocation.schema.type, "object");
+  assert.equal(invocation.cwd, "/tmp/test-project");
+  assert.match(invocation.prompt, /Paper A/);
 });
 
 test("applies review decisions to both artifacts", () => {

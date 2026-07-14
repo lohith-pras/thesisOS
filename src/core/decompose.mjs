@@ -5,15 +5,31 @@ const TOOL_BY_KIND = {
   experiment: "vscode"
 };
 
+export function ensureLiteratureTask(tasks) {
+  if (tasks.some((task) => task.kind === "literature") || !tasks.some((task) => ["notes", "thesis"].includes(task.kind))) return tasks;
+  const literatureTask = {
+    id: "task-literature",
+    kind: "literature",
+    title: "Find and review supporting literature",
+    tool: TOOL_BY_KIND.literature,
+    status: "ready",
+    approvalStatus: "pending",
+    evidence: ["Search Zotero for supporting sources", "Capture claim, method, and limitation"]
+  };
+  return [literatureTask, ...tasks.map((task) => ["notes", "thesis"].includes(task.kind)
+    ? { ...task, dependsOn: [...new Set(["task-literature", ...(task.dependsOn ?? [])])] }
+    : task)];
+}
+
 /**
  * Deterministic demo fallback. The future agent adapter will replace the
  * keyword extraction while preserving this output contract.
  */
-export function decomposeFeedback(feedback) {
+export function decomposeFeedback(feedback, options = {}) {
   const text = feedback.trim();
-  const tasks = [];
+  let tasks = [];
 
-  if (/paper|article|literature|citation|compare|khalili|source/i.test(text)) {
+  if (/paper|article|literature|citation|compare|khalili|source|evidence|claim|assumption|assert|method|limitation|mitigation|interference|related work|prior work/i.test(text)) {
     tasks.push({
       id: "task-literature",
       kind: "literature",
@@ -25,7 +41,7 @@ export function decomposeFeedback(feedback) {
     });
   }
 
-  if (/section|chapter|thesis|write|revise|methodology|3\.2/i.test(text)) {
+  if (/section|chapter|thesis|write|revise|methodology|3\.2|assumption|claim|assert|mitigation|interference|draft|paragraph|explain|justify|support/i.test(text)) {
     tasks.push({
       id: "task-notes",
       kind: "notes",
@@ -61,6 +77,10 @@ export function decomposeFeedback(feedback) {
     });
   }
 
+  tasks = ensureLiteratureTask(tasks);
+  const objectiveIds = (options.context?.objectives ?? []).map(({ id }) => id);
+  const targetLocationIds = (options.context?.targetLocations ?? []).map(({ id }) => id);
+  tasks = tasks.map((task) => ({ ...task, objectiveIds, targetLocationIds }));
   return {
     schemaVersion: 1,
     feedback: text,

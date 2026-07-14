@@ -1,0 +1,481 @@
+{
+  "schemaVersion": 3,
+  "revision": 9,
+  "project": {
+    "name": "ISAC Networks",
+    "thesisDir": null,
+    "vaultPath": null
+  },
+  "feedbackThreads": [],
+  "profile": {
+    "objectives": [
+      {
+        "id": "objective-1",
+        "text": "Conduct a targeted literature review on ISAC networks, cognitive radars, reinforcement learning, and mathematical optimization methods.",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:2",
+        "excerpt": "Conduct a targeted literature review on ISAC networks [1], cognitive radars [2], rein- forcement learning [15], and mathematical optimization methods [16].",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "Conduct a targeted literature review on ISAC networks [1], cognitive radars [2], rein- forcement learning [15], and mathematical optimization methods [16]."
+        }
+      },
+      {
+        "id": "objective-2",
+        "text": "Select and investigate at least one of the optimization problems P1-P3.",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:2",
+        "excerpt": "Select and investigate at least one of the above-mentioned optimization problems (P1-P3) .",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "Select and investigate at least one of the above-mentioned optimization problems (P1-P3) ."
+        }
+      },
+      {
+        "id": "objective-3",
+        "text": "Develop and implement an online optimization framework for the considered problem.",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:2",
+        "excerpt": "Develop and implement an online optimization framework for the considered problem.",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "Develop and implement an online optimization framework for the considered problem."
+        }
+      },
+      {
+        "id": "objective-4",
+        "text": "Evaluate and compare the proposed solution against well-known benchmark schemes.",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:2",
+        "excerpt": "Evaluate and compare the proposed solution against well-known benchmark schemes.",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "Evaluate and compare the proposed solution against well-known benchmark schemes."
+        }
+      }
+    ],
+    "problems": [
+      {
+        "id": "P1",
+        "name": "Adaptive Coverage",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:1",
+        "excerpt": "P1: Adaptive Coverage",
+        "summary": "Coverage in cognitive ISAC networks is expected to adapt to dynamic environments, including hotspot coverage, multistatic coverage for moving targets, and adaptive deployment strategies.",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:1",
+          "excerpt": "P1: Adaptive Coverage"
+        }
+      },
+      {
+        "id": "P2",
+        "name": "Interference Mitigation",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:1",
+        "excerpt": "P2: Interference Mitigation",
+        "summary": "Interference mitigation in cognitive ISAC networks is challenging because environments are dynamic, with practical clutter models described as geometry-dependent and highly time-varying.",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:1",
+          "excerpt": "P2: Interference Mitigation"
+        }
+      },
+      {
+        "id": "P3",
+        "name": "Resource Allocation",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:2",
+        "excerpt": "P3: Resource Allocation",
+        "summary": "Resource allocation in cognitive ISAC networks requires environment-aware and predictive decision-making to dynamically allocate communication, sensing, and computational resources.",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "P3: Resource Allocation"
+        }
+      }
+    ],
+    "deliverables": [],
+    "deadlines": [],
+    "supervisorExpectations": [],
+    "seedReferences": [
+      {
+        "id": "reference-1",
+        "text": "A. Liu et al., “A survey on fundamental limits of integrated sensing and communication,” IEEE Communications Surveys & Tutorials, 2022.",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:2",
+        "excerpt": "[1] A. Liu et al. , “A survey on fundamental limits of integrated sensing and communication,” IEEE Commun. Surv. Tutor. , vol. 24, no. 2, pp. 994–1034, 2022.",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "[1] A. Liu et al. , “A survey on fundamental limits of integrated sensing and communication,” IEEE Commun. Surv. Tutor. , vol. 24, no. 2, pp. 994–1034, 2022."
+        }
+      },
+      {
+        "id": "reference-2",
+        "text": "S. Haykin, “Cognitive radar: a way of the future,” IEEE Signal Processing Magazine, 2006.",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:2",
+        "excerpt": "[2] S. Haykin, “Cognitive radar: a way of the future,” IEEE Signal Process. Mag. , vol. 23, no. 1, pp. 30–40, 2006.",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "[2] S. Haykin, “Cognitive radar: a way of the future,” IEEE Signal Process. Mag. , vol. 23, no. 1, pp. 30–40, 2006."
+        }
+      },
+      {
+        "id": "reference-15",
+        "text": "R. S. Sutton and A. G. Barto, Reinforcement Learning: An Introduction, 2nd ed., MIT Press, 2018.",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:3",
+        "excerpt": "[15] R. S. Sutton and A. G. Barto, Reinforcement Learning: An Introduction , 2nd ed. Cambridge, MA, USA: MIT Press, 2018.",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:3",
+          "excerpt": "[15] R. S. Sutton and A. G. Barto, Reinforcement Learning: An Introduction , 2nd ed. Cambridge, MA, USA: MIT Press, 2018."
+        }
+      },
+      {
+        "id": "reference-16",
+        "text": "S. Boyd and L. Vandenberghe, Convex optimization, Cambridge University Press, 2004.",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:3",
+        "excerpt": "[16] S. Boyd and L. Vandenberghe, Convex optimization . Cambridge University Press, 2004.",
+        "provenance": {
+          "kind": "extracted-approved",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:3",
+          "excerpt": "[16] S. Boyd and L. Vandenberghe, Convex optimization . Cambridge University Press, 2004."
+        }
+      }
+    ],
+    "revision": 3,
+    "stage": {
+      "value": "experiments",
+      "provenance": {
+        "kind": "user-stated"
+      }
+    },
+    "approvedAt": "2026-07-14T01:40:10.501Z",
+    "title": {
+      "value": "Research Project Intelligent Decision-making for Cognitive ISAC Networks",
+      "sourceId": "document-27efa5fea985",
+      "locator": "page:1",
+      "excerpt": "Research Project Intelligent Decision-making for Cognitive ISAC Networks",
+      "provenance": {
+        "kind": "extracted-approved",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:1",
+        "excerpt": "Research Project Intelligent Decision-making for Cognitive ISAC Networks"
+      }
+    },
+    "topic": {
+      "value": "Design of novel and intelligent optimization frameworks for cognitive ISAC networks",
+      "sourceId": "document-27efa5fea985",
+      "locator": "page:1",
+      "excerpt": "this project aims to investigate the design of novel and intelligent optimization frameworks for cognitive ISAC networks",
+      "provenance": {
+        "kind": "extracted-approved",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:1",
+        "excerpt": "this project aims to investigate the design of novel and intelligent optimization frameworks for cognitive ISAC networks"
+      }
+    }
+  },
+  "profileProposal": {
+    "id": "profile-proposal-2568f67c-0e21-41cd-92b2-8951b783d3cb",
+    "status": "reviewed",
+    "sourceDocumentIds": [
+      "document-27efa5fea985"
+    ],
+    "fields": {
+      "title": {
+        "value": "Research Project Intelligent Decision-making for Cognitive ISAC Networks",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:1",
+        "excerpt": "Research Project Intelligent Decision-making for Cognitive ISAC Networks",
+        "provenance": {
+          "kind": "extracted",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:1",
+          "excerpt": "Research Project Intelligent Decision-making for Cognitive ISAC Networks"
+        }
+      },
+      "topic": {
+        "value": "Design of novel and intelligent optimization frameworks for cognitive ISAC networks",
+        "sourceId": "document-27efa5fea985",
+        "locator": "page:1",
+        "excerpt": "this project aims to investigate the design of novel and intelligent optimization frameworks for cognitive ISAC networks",
+        "provenance": {
+          "kind": "extracted",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:1",
+          "excerpt": "this project aims to investigate the design of novel and intelligent optimization frameworks for cognitive ISAC networks"
+        }
+      },
+      "objectives": [
+        {
+          "id": "objective-1",
+          "text": "Conduct a targeted literature review on ISAC networks, cognitive radars, reinforcement learning, and mathematical optimization methods.",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "Conduct a targeted literature review on ISAC networks [1], cognitive radars [2], rein- forcement learning [15], and mathematical optimization methods [16].",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:2",
+            "excerpt": "Conduct a targeted literature review on ISAC networks [1], cognitive radars [2], rein- forcement learning [15], and mathematical optimization methods [16]."
+          }
+        },
+        {
+          "id": "objective-2",
+          "text": "Select and investigate at least one of the optimization problems P1-P3.",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "Select and investigate at least one of the above-mentioned optimization problems (P1-P3) .",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:2",
+            "excerpt": "Select and investigate at least one of the above-mentioned optimization problems (P1-P3) ."
+          }
+        },
+        {
+          "id": "objective-3",
+          "text": "Develop and implement an online optimization framework for the considered problem.",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "Develop and implement an online optimization framework for the considered problem.",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:2",
+            "excerpt": "Develop and implement an online optimization framework for the considered problem."
+          }
+        },
+        {
+          "id": "objective-4",
+          "text": "Evaluate and compare the proposed solution against well-known benchmark schemes.",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "Evaluate and compare the proposed solution against well-known benchmark schemes.",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:2",
+            "excerpt": "Evaluate and compare the proposed solution against well-known benchmark schemes."
+          }
+        }
+      ],
+      "problems": [
+        {
+          "id": "P1",
+          "name": "Adaptive Coverage",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:1",
+          "excerpt": "P1: Adaptive Coverage",
+          "summary": "Coverage in cognitive ISAC networks is expected to adapt to dynamic environments, including hotspot coverage, multistatic coverage for moving targets, and adaptive deployment strategies.",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:1",
+            "excerpt": "P1: Adaptive Coverage"
+          }
+        },
+        {
+          "id": "P2",
+          "name": "Interference Mitigation",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:1",
+          "excerpt": "P2: Interference Mitigation",
+          "summary": "Interference mitigation in cognitive ISAC networks is challenging because environments are dynamic, with practical clutter models described as geometry-dependent and highly time-varying.",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:1",
+            "excerpt": "P2: Interference Mitigation"
+          }
+        },
+        {
+          "id": "P3",
+          "name": "Resource Allocation",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "P3: Resource Allocation",
+          "summary": "Resource allocation in cognitive ISAC networks requires environment-aware and predictive decision-making to dynamically allocate communication, sensing, and computational resources.",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:2",
+            "excerpt": "P3: Resource Allocation"
+          }
+        }
+      ],
+      "seedReferences": [
+        {
+          "id": "reference-1",
+          "text": "A. Liu et al., “A survey on fundamental limits of integrated sensing and communication,” IEEE Communications Surveys & Tutorials, 2022.",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "[1] A. Liu et al. , “A survey on fundamental limits of integrated sensing and communication,” IEEE Commun. Surv. Tutor. , vol. 24, no. 2, pp. 994–1034, 2022.",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:2",
+            "excerpt": "[1] A. Liu et al. , “A survey on fundamental limits of integrated sensing and communication,” IEEE Commun. Surv. Tutor. , vol. 24, no. 2, pp. 994–1034, 2022."
+          }
+        },
+        {
+          "id": "reference-2",
+          "text": "S. Haykin, “Cognitive radar: a way of the future,” IEEE Signal Processing Magazine, 2006.",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:2",
+          "excerpt": "[2] S. Haykin, “Cognitive radar: a way of the future,” IEEE Signal Process. Mag. , vol. 23, no. 1, pp. 30–40, 2006.",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:2",
+            "excerpt": "[2] S. Haykin, “Cognitive radar: a way of the future,” IEEE Signal Process. Mag. , vol. 23, no. 1, pp. 30–40, 2006."
+          }
+        },
+        {
+          "id": "reference-15",
+          "text": "R. S. Sutton and A. G. Barto, Reinforcement Learning: An Introduction, 2nd ed., MIT Press, 2018.",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:3",
+          "excerpt": "[15] R. S. Sutton and A. G. Barto, Reinforcement Learning: An Introduction , 2nd ed. Cambridge, MA, USA: MIT Press, 2018.",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:3",
+            "excerpt": "[15] R. S. Sutton and A. G. Barto, Reinforcement Learning: An Introduction , 2nd ed. Cambridge, MA, USA: MIT Press, 2018."
+          }
+        },
+        {
+          "id": "reference-16",
+          "text": "S. Boyd and L. Vandenberghe, Convex optimization, Cambridge University Press, 2004.",
+          "sourceId": "document-27efa5fea985",
+          "locator": "page:3",
+          "excerpt": "[16] S. Boyd and L. Vandenberghe, Convex optimization . Cambridge University Press, 2004.",
+          "provenance": {
+            "kind": "extracted",
+            "sourceId": "document-27efa5fea985",
+            "locator": "page:3",
+            "excerpt": "[16] S. Boyd and L. Vandenberghe, Convex optimization . Cambridge University Press, 2004."
+          }
+        }
+      ]
+    },
+    "proposedBy": {
+      "provider": "codex",
+      "model": "default"
+    },
+    "createdAt": "2026-07-14T01:40:05.790Z",
+    "reviewedAt": "2026-07-14T01:40:10.501Z"
+  },
+  "documents": [
+    {
+      "id": "document-27efa5fea985",
+      "kind": "project-description",
+      "filename": "topic2.pdf",
+      "mediaType": "application/pdf",
+      "sha256": "27efa5fea9858e23761696f47516ae4e6b3ed5d56ae7332fc23c888954c679cb",
+      "byteCount": 972399,
+      "characterCount": 8524,
+      "pageCount": 3,
+      "localPath": "/Users/lohith/Documents/Codex/2026-07-13/thesisOS/.thesisos/uploads/72fcc2c8-939f-4e2b-bc8e-686017de4a37/topic2.pdf",
+      "importedAt": "2026-07-14T01:39:34.848Z"
+    }
+  ],
+  "manuscript": {
+    "chapters": [],
+    "citations": [],
+    "bibliography": {},
+    "unresolvedCitekeys": []
+  },
+  "sources": [],
+  "evidence": [],
+  "claims": [],
+  "generatedViews": {},
+  "events": [
+    {
+      "id": "51521909-ab91-4e8d-a026-7665326daced",
+      "type": "project.created",
+      "at": "2026-07-14T01:29:14.311Z"
+    },
+    {
+      "id": "85fcd64c-06cb-46fb-a0eb-39be6b2714b6",
+      "type": "document.imported",
+      "at": "2026-07-14T01:30:48.316Z",
+      "documentId": "document-27efa5fea985"
+    },
+    {
+      "id": "36af3853-0540-4b48-a986-c5348d3ed543",
+      "type": "project.paths.updated",
+      "at": "2026-07-14T01:31:19.140Z"
+    },
+    {
+      "id": "463ac46d-5a20-4447-9ee2-b295deef528b",
+      "type": "profile.answers.recorded",
+      "at": "2026-07-14T01:32:06.975Z"
+    },
+    {
+      "id": "86749db6-199b-411e-9f79-6b7fcced5a7d",
+      "type": "profile.proposed",
+      "at": "2026-07-14T01:32:57.255Z",
+      "profileProposalId": "profile-proposal-b96268bc-9b4e-4b25-8f3a-fa649e3f3e46"
+    },
+    {
+      "id": "2d76325f-eff1-4bda-80a8-93329d630341",
+      "type": "profile.approved",
+      "at": "2026-07-14T01:33:43.755Z",
+      "profileProposalId": "profile-proposal-b96268bc-9b4e-4b25-8f3a-fa649e3f3e46",
+      "fields": [
+        "title",
+        "topic",
+        "objectives",
+        "problems",
+        "seedReferences"
+      ]
+    },
+    {
+      "id": "aba4b2c5-dc10-4835-8db7-34610f6dd1dd",
+      "type": "document.imported",
+      "at": "2026-07-14T01:39:34.848Z",
+      "documentId": "document-27efa5fea985"
+    },
+    {
+      "id": "9a206b60-62a2-4658-8a16-99d66defb48c",
+      "type": "profile.proposed",
+      "at": "2026-07-14T01:40:05.790Z",
+      "profileProposalId": "profile-proposal-2568f67c-0e21-41cd-92b2-8951b783d3cb"
+    },
+    {
+      "id": "9a504703-4a11-482f-b978-d535e2b62881",
+      "type": "profile.approved",
+      "at": "2026-07-14T01:40:10.501Z",
+      "profileProposalId": "profile-proposal-2568f67c-0e21-41cd-92b2-8951b783d3cb",
+      "fields": [
+        "title",
+        "topic",
+        "objectives",
+        "problems",
+        "seedReferences"
+      ]
+    }
+  ]
+}
