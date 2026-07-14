@@ -320,6 +320,12 @@ export function createAppServer(dependencies = {}) {
         sendJson(response, 200, loadDemoLibrary());
         return;
       }
+      if (request.method === "POST" && url.pathname === "/api/demo/restart") {
+        if (!judgeMode) throw httpError(403, "Demo restart is only available in judge mode.");
+        judgeState = createDemoProjectState();
+        sendJson(response, 200, { state: judgeState, readiness: profileReadiness(judgeState), connection: loadDemoLibrary() });
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/obsidian/status") {
         const vaultPath = await loadConfiguredVaultRoot();
         sendJson(response, 200, { configured: Boolean(vaultPath), ...(vaultPath ? { vault: await inspectObsidianVault(vaultPath) } : {}) });

@@ -85,6 +85,24 @@ test("judge mode starts directly with the labelled demo library", async () => {
   });
 });
 
+test("judge mode can restart its isolated demo state", async () => {
+  await withServer({ judgeMode: true }, async (baseUrl) => {
+    const project = await (await fetch(`${baseUrl}/api/project`)).json();
+    const decomposition = await fetch(`${baseUrl}/api/workflow/decompose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback: "Clarify the grid-congestion framing.", provider: "offline", expectedRevision: project.state.revision })
+    });
+    assert.equal(decomposition.status, 200);
+    const restart = await fetch(`${baseUrl}/api/demo/restart`, { method: "POST" });
+    const payload = await restart.json();
+    assert.equal(restart.status, 200);
+    assert.equal(payload.state.feedbackThreads.length, 0);
+    assert.equal(payload.connection.mode, "demo");
+    assert.equal(payload.readiness.ready, true);
+  });
+});
+
 test("exports a read-only revision response matrix from canonical state", async () => {
   await withServer({ judgeMode: true }, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/revision-response-matrix`);
@@ -878,6 +896,14 @@ test("frontend exposes Claim Traceback through the canonical workflow API", asyn
   assert.match(source, /CLAIM TRACEBACK/);
   assert.match(source, /trace-claim:/);
   assert.match(server, /\/api\/workflow\/claim-traceback/);
+});
+
+test("frontend provides a state-aware guide only for the demo workflow", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+  assert.match(source, /DEMO GUIDE/);
+  assert.match(source, /\/api\/demo\/restart/);
+  assert.match(source, /demoGuideHidden/);
+  assert.match(source, /seed-demo-feedback/);
 });
 
 test("website design records the local-first Zotero connection flow", async () => {

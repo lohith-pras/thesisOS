@@ -30,6 +30,7 @@ const defaultState = {
   notePreview: null,
   claimTraceback: null,
   noteWrite: null,
+  demoGuideHidden: false,
   obsidianVaultPath: "",
   papers: [],
   connection: { status: "checking", mode: null, access: null, library: null, libraries: [], paperCount: 0, message: "Checking for Zotero Desktop…" }
@@ -133,6 +134,23 @@ function connectionLabel() {
   return "Zotero not connected";
 }
 
+function demoGuide() {
+  if (state.connection.mode !== "demo") return "";
+  const literatureTask = state.tasks.find((task) => task.kind === "literature");
+  const completed = [Boolean(state.feedbackThreadId && state.tasks.length), literatureTask?.approvalStatus === "approved", Boolean(state.evidenceSelection), Boolean(state.notePreview), Boolean(state.notePreview)];
+  const current = completed.findIndex((done) => !done);
+  const step = current === -1 ? 4 : current;
+  if (state.demoGuideHidden) return `<button class="demo-guide-pill" data-action="show-demo-guide" aria-label="Show demo guide">Demo guide · ${completed.filter(Boolean).length}/5</button>`;
+  const steps = [
+    { view: "overview", title: "Try feedback", copy: "Choose a review prompt or paste your own comment about workplace EV charging." },
+    { view: "tasks", title: "Review the literature task", copy: "Approve it to unlock the read-only smart-charging literature search." },
+    { view: "evidence", title: "Select evidence", copy: "Choose papers you have reviewed. Only their source IDs can enter a note." },
+    { view: "notes", title: "Preview the grounded note", copy: "Inspect the evidence-note review view, source cards, and Claim Traceback." },
+    { view: "notes", title: "Understand the write boundary", copy: "Judge mode stops at preview. A real vault write needs separate approval." }
+  ];
+  return `<aside class="demo-guide panel" aria-label="Demo guide"><div class="panel-head"><span class="label">DEMO GUIDE · Step ${step + 1} of 5</span><span><button class="text-button" data-action="restart-demo">Restart</button> <button class="text-button" data-action="hide-demo-guide">Hide</button></span></div><ol>${steps.map((item, index) => `<li class="${completed[index] ? "complete" : index === step ? "active" : ""}"><i>${completed[index] ? "✓" : String(index + 1)}</i><div><strong>${esc(item.title)}</strong><p>${esc(item.copy)}</p>${index === step && index < 4 ? button(`Go to ${item.title} →`, `demo-guide-step:${item.view}`, "outline", state.workflowBusy) : ""}${index === 1 || index === 3 ? `<button class="text-button guide-guardrail" data-action="demo-guide-guardrail:${item.view}">Test a guardrail ↗</button>` : ""}</div></li>`).join("")}</ol></aside>`;
+}
+
 function shell(content) {
   const nav = [["overview", "Overview"], ["profile", "Thesis profile"], ["tasks", "Tasks"], ["evidence", "Library"], ["notes", "Evidence notes"], ["integrations", "Connections"]];
   const pending = state.tasks.filter((task) => task.approvalStatus === "pending").length;
@@ -145,7 +163,7 @@ function shell(content) {
     <div class="sidebar-rule"></div>
     <div class="sidebar-block"><span class="label">CURRENT PROJECT</span><strong>${esc(state.project)}</strong><span class="project-status"><i></i> Stored on this machine</span></div>
     <div class="sidebar-bottom"><button class="nav-item ${state.view === "settings" ? "active" : ""}" data-view="settings"><span class="nav-glyph">${icon("settings")}</span>Settings</button><button class="nav-item ${state.view === "about" ? "active" : ""}" data-view="about"><span class="nav-glyph">${icon("about")}</span>About ThesisOS</button></div>
-  </aside><main class="main-content"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span><b>/</b><strong>${esc(pageTitle())}</strong></div><div class="topbar-actions"><button class="connection connection-button ${connected ? "connected" : state.connection.status}" data-view="integrations"><i></i>${esc(connectionLabel())}</button></div></header>${activityStrip()}<div class="page-content">${content}${state.view === "overview" ? responseMatrixPanel() : ""}</div></main>`;
+  </aside><main class="main-content"><header class="topbar"><div class="breadcrumbs"><span>Workspace</span><b>/</b><strong>${esc(pageTitle())}</strong></div><div class="topbar-actions"><button class="connection connection-button ${connected ? "connected" : state.connection.status}" data-view="integrations"><i></i>${esc(connectionLabel())}</button></div></header>${activityStrip()}<div class="page-content">${content}${state.view === "overview" ? responseMatrixPanel() : ""}</div>${demoGuide()}</main>`;
 }
 
 function pageTitle() { return ({ overview: "Overview", profile: "Thesis profile", tasks: "Task review", evidence: "Zotero library", notes: "Evidence notes", integrations: "Connections", settings: "Settings", about: "About ThesisOS" })[state.view] || "Overview"; }
@@ -451,6 +469,25 @@ function openTask(id) {
 }
 
 async function handleAction(action) {
+  if (action === "hide-demo-guide") { state.demoGuideHidden = true; saveState(); return render(); }
+  if (action === "show-demo-guide") { state.demoGuideHidden = false; saveState(); return render(); }
+  if (action.startsWith("demo-guide-step:")) return setView(action.slice("demo-guide-step:".length));
+  if (action.startsWith("demo-guide-guardrail:")) {
+    state.workflowError = "Guardrail to test: reject the proposed literature task and its Zotero search remains unavailable; in Evidence notes, judge mode refuses filesystem writes.";
+    return setView(action.slice("demo-guide-guardrail:".length));
+  }
+  if (action === "restart-demo") {
+    beginActivity("demo-restart", "Restarting the demo…", "Restoring the smart-EV-charging fixture without touching a real workspace.");
+    try {
+      const response = await fetch("/api/demo/restart", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "The demo could not be restarted.");
+      state = { ...structuredClone(defaultState), project: payload.state.project.name, projectState: payload.state, profileReadiness: payload.readiness, connection: payload.connection, papers: payload.connection.papers, view: "overview" };
+      completeActivity("Demo restarted.", "Choose a feedback prompt to begin the guided workflow.");
+    } catch (error) { failActivity(error, "restart-demo"); }
+    saveState();
+    return render();
+  }
   if (action.startsWith("seed-demo-feedback:")) {
     const option = demoFeedbackOptions.find((candidate) => candidate.id === action.slice("seed-demo-feedback:".length));
     if (!option) return;
