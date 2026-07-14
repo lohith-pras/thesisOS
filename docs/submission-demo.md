@@ -26,9 +26,9 @@ Open `http://127.0.0.1:4173`.
 - [x] Screenshot: task graph from messy supervisor feedback (`docs/assets/judge-task-approval.png`).
 - [x] Screenshot: judge retrieval results with abstract coverage, threshold, fallback mode, and match provenance (`docs/assets/judge-retrieval.png`).
 - [x] Screenshot: grounded note with stable source-ID citations (`docs/assets/judge-grounded-note.png`).
-- [ ] Capture screenshot/video moment: Claim Traceback showing a source note → evidence → task → feedback (available through **Show completed proof**).
+- [x] Screenshot: Claim Traceback showing a source note → evidence → task → feedback (`docs/assets/judge-claim-traceback.png`).
 - [ ] Screenshot/video moment: Revision Response Matrix downloaded from the canonical workflow.
-- [ ] Capture screenshot/video moment: rejected task cannot search or an unselected citation is refused (the latter is available through **Test citation boundary**).
+- [x] Screenshot: unselected citation refused before preview (`docs/assets/judge-citation-rejection.png`).
 - [x] GPT-5.6 build feedback receipt preserved (`docs/assets/codex-feedback-receipt.png`).
 - [ ] Upload `docs/assets/thesisos-demo.mp4` as a public YouTube video under three minutes.
 - [x] Main Codex GPT-5.6 build and `/feedback` ID verified: `019f5cc1-08be-7071-a5ea-220a8de0f313`.
