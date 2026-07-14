@@ -27,6 +27,7 @@ import { createPaperCard, paperMap } from "./core/paper-map.mjs";
 import { auditObsidianVault } from "./core/vault-audit.mjs";
 import { attachCanonicalEvidence, recordCanonicalDraft, workflowReadModel } from "./core/workflow.mjs";
 import { createRevisionResponseMatrix } from "./core/revision-response-matrix.mjs";
+import { createClaimTraceback } from "./core/claim-traceback.mjs";
 
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_DIR = resolve(SOURCE_DIR, "..");
@@ -196,6 +197,18 @@ export function createAppServer(dependencies = {}) {
       if (request.method === "GET" && url.pathname === "/api/revision-response-matrix") {
         if (!await stateExists()) throw httpError(409, "Create a thesis workspace before exporting a revision response matrix.");
         sendJson(response, 200, createRevisionResponseMatrix(await loadCanonicalState()));
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/workflow/claim-traceback") {
+        if (!await stateExists()) throw httpError(409, "Create a thesis workspace before tracing a grounded source note.");
+        const feedbackThreadId = url.searchParams.get("feedbackThreadId");
+        const sourceId = url.searchParams.get("sourceId");
+        if (!feedbackThreadId || !sourceId) throw httpError(400, "Feedback thread ID and source ID are required.");
+        try {
+          sendJson(response, 200, createClaimTraceback(await loadCanonicalState(), { feedbackThreadId, sourceId }));
+        } catch (error) {
+          throw httpError(404, error.message);
+        }
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/init") {

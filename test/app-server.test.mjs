@@ -870,6 +870,14 @@ test("frontend downloads the revision response matrix from the canonical API", a
   assert.match(source, /REVISION RESPONSE MATRIX/);
 });
 
+test("frontend exposes Claim Traceback through the canonical workflow API", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+  const server = await readFile(resolve("src/app-server.mjs"), "utf8");
+  assert.match(source, /CLAIM TRACEBACK/);
+  assert.match(source, /trace-claim:/);
+  assert.match(server, /\/api\/workflow\/claim-traceback/);
+});
+
 test("website design records the local-first Zotero connection flow", async () => {
   const design = await readFile(resolve("design.md"), "utf8");
   assert.match(design, /## Zotero connection user flow/);

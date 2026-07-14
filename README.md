@@ -21,12 +21,15 @@ supervisor feedback
   → researcher selects evidence
   → Codex CLI grounded draft
   → researcher previews note
+  → Claim Traceback: source note → evidence → task → feedback
   → explicit Obsidian write approval
 ```
 
 The researcher remains the decision-maker: rejected tasks cannot run, only selected source IDs can enter drafting, and filesystem writes are separate approvals.
 
 After a workflow runs, ThesisOS can export a **Revision Response Matrix**: a supervisor-readable Markdown table of each comment, proposed task, researcher decision, selected Zotero sources, and grounded-note status. It reports only the approval and evidence trail ThesisOS can verify; it never claims an unverified manuscript change.
+
+**Claim Traceback** lets the researcher select a grounded source note and inspect its selected Zotero record, approved task, original supervisor feedback, and response-matrix status. It traces only source-backed draft notes—not arbitrary manuscript sentences that ThesisOS has not verified.
 
 ThesisOS can also maintain `.thesisos/thesis-state.json` as the canonical record of links between feedback, manuscript citations, selected evidence, model-proposed claims, and researcher approvals. Zotero and the local thesis checkout remain authoritative for their native data; generated Obsidian views are deterministic and regenerable. See the [canonical workspace commands](docs/cli.md#canonical-revision-workspace).
 
@@ -61,7 +64,8 @@ ThesisOS runs on macOS, Windows, and Linux with Node.js 22+. The optional submis
 4. Run the approved read-only Zotero search.
 5. Select reviewed papers and attach them as structured evidence.
 6. Continue to the dedicated Evidence notes step and draft with Codex CLI or the local template.
-7. Preview the note, then explicitly approve saving it to the configured Obsidian vault.
+7. Use Claim Traceback to inspect a source note's evidence, task approval, and feedback trail.
+8. Preview the note, then explicitly approve saving it to the configured Obsidian vault.
 
 ## How Codex and GPT-5.6 are used
 

@@ -28,6 +28,7 @@ const defaultState = {
   evidenceRefs: [],
   noteDraft: null,
   notePreview: null,
+  claimTraceback: null,
   noteWrite: null,
   obsidianVaultPath: "",
   papers: [],
@@ -265,7 +266,10 @@ function noteWorkflowPanel() {
     : state.obsidianVaultPath
       ? `<div class="vault-connected"><span class="label">OBSIDIAN VAULT CONNECTED</span><code>${esc(state.obsidianVaultPath)}</code><button class="text-button" data-action="change-obsidian-vault">Change vault</button></div><p class="helper">Notes go into <code>Evidence/</code> inside this vault. ThesisOS updates only notes it previously created.</p>${button(state.noteWrite ? (state.noteWrite.updated ? "Note updated ✓" : "Note written ✓") : "Approve and write note", "write-obsidian-note", "dark", Boolean(state.noteWrite))}`
       : `<div class="vault-setup"><h3>Where should this note live?</h3><p>Choose an existing Obsidian vault, or create a new project vault. ThesisOS remembers your choice for this project.</p><div class="note-actions">${button("Choose existing vault", "choose-existing-vault", "dark")} ${button("Create new vault", "create-obsidian-vault", "outline")}</div></div>`) : "";
-  return `<section class="panel note-workflow"><div class="panel-head"><span class="label">OBSIDIAN NOTE</span><span class="timestamp">${state.noteWrite ? (state.noteWrite.updated ? "Updated with approval" : "Written with approval") : state.notePreview ? "Preview only" : "No write yet"}</span></div><h2>${state.noteWrite ? (state.noteWrite.updated ? "Literature note updated." : "Literature note created.") : "Turn selected evidence into a grounded note."}</h2><p>${state.noteWrite ? `Saved to ${esc(state.noteWrite.path)}` : "Drafting and filesystem writing are separate approval boundaries."}</p>${sectionActivity(["evidence-attach", "codex-draft", "note-preview", "vault-picker", "vault-write"])}${draftWarning}${draftControls}${state.notePreview ? `<pre class="note-preview">${esc(state.notePreview.markdown)}</pre>` : ""}${writeControls}</section>`;
+  const traceableNotes = state.noteDraft?.sourceNotes ?? [];
+  const traceback = state.claimTraceback ? `<article class="claim-traceback-result"><span class="label">TRACE COMPLETE</span><h3>${esc(state.claimTraceback.source.title)}</h3><p>${esc(state.claimTraceback.claim?.summary || "No grounded source-note text was recorded.")}</p><dl><div><dt>Supervisor feedback</dt><dd>${esc(state.claimTraceback.feedback.comment)}</dd></div><div><dt>Approved task</dt><dd>${esc(state.claimTraceback.task.title)} · ${esc(statusLabel(state.claimTraceback.task.approvalStatus))}</dd></div><div><dt>Evidence</dt><dd><code>${esc(state.claimTraceback.source.sourceId)}</code>${state.claimTraceback.responseMatrix ? ` · ${esc(state.claimTraceback.responseMatrix.status)}` : ""}</dd></div></dl></article>` : "";
+  const tracePanel = state.notePreview && traceableNotes.length && state.feedbackThreadId ? `<section class="claim-traceback"><div><span class="label">CLAIM TRACEBACK</span><h3>Trace a grounded source note.</h3><p>Follow this draft claim through its selected Zotero evidence, approved task, and original supervisor feedback.</p></div><div class="trace-buttons">${traceableNotes.map((note) => button(`Trace ${esc(note.sourceId)} →`, `trace-claim:${note.sourceId}`, "outline", state.workflowBusy)).join("")}</div>${traceback}</section>` : "";
+  return `<section class="panel note-workflow"><div class="panel-head"><span class="label">OBSIDIAN NOTE</span><span class="timestamp">${state.noteWrite ? (state.noteWrite.updated ? "Updated with approval" : "Written with approval") : state.notePreview ? "Preview only" : "No write yet"}</span></div><h2>${state.noteWrite ? (state.noteWrite.updated ? "Literature note updated." : "Literature note created.") : "Turn selected evidence into a grounded note."}</h2><p>${state.noteWrite ? `Saved to ${esc(state.noteWrite.path)}` : "Drafting and filesystem writing are separate approval boundaries."}</p>${sectionActivity(["evidence-attach", "codex-draft", "note-preview", "claim-traceback", "vault-picker", "vault-write"])}${draftWarning}${draftControls}${state.notePreview ? `<pre class="note-preview">${esc(state.notePreview.markdown)}</pre>` : ""}${tracePanel}${writeControls}</section>`;
 }
 
 function evidence() {
@@ -349,6 +353,7 @@ function applyCanonicalWorkflow(workflow) {
   state.selectedSourceIds = workflow.selectedEvidence.map(({ sourceId }) => sourceId);
   state.noteDraft = workflow.draft;
   state.notePreview = workflow.preview;
+  state.claimTraceback = null;
   state.noteWrite = null;
 }
 
@@ -432,6 +437,20 @@ function openTask(id) {
 }
 
 async function handleAction(action) {
+  if (action.startsWith("trace-claim:")) {
+    if (!state.feedbackThreadId) return;
+    const sourceId = action.slice("trace-claim:".length);
+    beginActivity("claim-traceback", "Tracing the grounded source note…", "Reading its canonical evidence, approval, and feedback trail.", action);
+    try {
+      const response = await fetch(`/api/workflow/claim-traceback?feedbackThreadId=${encodeURIComponent(state.feedbackThreadId)}&sourceId=${encodeURIComponent(sourceId)}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "The source-note traceback could not be created.");
+      state.claimTraceback = payload;
+      completeActivity("Claim traceback ready.", "The source note is linked to its evidence, task approval, and feedback.");
+    } catch (error) { failActivity(error, action); }
+    saveState();
+    return render();
+  }
   if (action === "start-onboarding") { state.onboardingStep = 1; saveState(); return render(); }
   if (action.startsWith("onboarding-next:")) { state.onboardingStep = Number(action.split(":")[1]); saveState(); return render(); }
   if (action === "finish-onboarding") { state.onboardingStep = 0; state.view = "overview"; state.setupCollapsed = false; saveState(); location.hash = "overview"; return render(); }
@@ -508,6 +527,7 @@ async function handleAction(action) {
         state.evidenceRefs = payload.selection.evidenceRefs;
         state.noteDraft = null;
         state.notePreview = null;
+        state.claimTraceback = null;
       }
       state.noteWrite = null;
       state.view = "notes";
@@ -553,6 +573,7 @@ async function handleAction(action) {
         if (!previewResponse.ok) throw new Error(preview.message || "The grounded note preview could not be created.");
         state.noteDraft = draft;
         state.notePreview = preview;
+        state.claimTraceback = null;
       }
     } catch (error) {
       failActivity(error, "draft-evidence-note");
@@ -566,6 +587,7 @@ async function handleAction(action) {
     if (state.workflowBusy) return;
     beginActivity("note-preview", "Building the grounded note preview…", "No filesystem write has happened.", "preview-obsidian-note");
     state.noteDraft = null;
+    state.claimTraceback = null;
     try {
       const response = await fetch("/api/workflow/notes/preview", {
         method: "POST",
@@ -575,6 +597,7 @@ async function handleAction(action) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "The Obsidian note preview could not be created.");
       state.notePreview = payload;
+      state.claimTraceback = null;
     } catch (error) {
       failActivity(error, "preview-obsidian-note");
     }
@@ -679,6 +702,7 @@ async function handleAction(action) {
       state.evidenceRefs = [];
       state.noteDraft = null;
       state.notePreview = null;
+      state.claimTraceback = null;
       state.noteWrite = null;
       state.view = "evidence";
     } catch (error) {
@@ -841,6 +865,7 @@ app.addEventListener("submit", async (event) => {
     state.evidenceRefs = [];
     state.noteDraft = null;
     state.notePreview = null;
+    state.claimTraceback = null;
     state.noteWrite = null;
     state.view = "tasks";
   } catch (error) {

@@ -14,9 +14,9 @@ Open `http://127.0.0.1:4173`.
 2. **Feedback and Codex (0:20–0:50):** Paste a realistic supervisor email. Show Codex CLI decomposition into a validated task graph. Mention the visible deterministic fallback for judge machines without Codex.
 3. **Grounded retrieval (0:50–1:20):** Approve the literature task and search the fixture or live Zotero library. Point out retrieval mode, match score, and stable source ID.
 4. **Evidence boundary (1:20–1:45):** Select one or two reviewed papers and attach them. Explain that only selected stable source IDs can enter drafting.
-5. **Grounded drafting (1:45–2:05):** Draft the note and show its source-ID citations and provider label.
-6. **Trust payoff (2:05–2:20):** Show that an unapproved task cannot search and an unknown citation invalidates a draft. Judge mode also stops before filesystem writing.
-7. **Revision response matrix (2:20–2:30):** Return to Overview and download the matrix. Show comment → task → selected Zotero source IDs → grounded-note status, then say it never claims a manuscript change ThesisOS cannot verify.
+5. **Grounded drafting and Claim Traceback (1:45–2:10):** Draft the note, show its source-ID citations and provider label, then click Claim Traceback. Show source note → selected Zotero evidence → approved task → original feedback. Say it traces a grounded source note, not an unverified manuscript sentence.
+6. **Trust payoff (2:10–2:25):** Show that an unapproved task cannot search and an unknown citation invalidates a draft. Judge mode also stops before filesystem writing.
+7. **Revision response matrix (2:25–2:35):** Return to Overview and download the matrix. Show comment → task → selected Zotero source IDs → grounded-note status, then say it never claims a manuscript change ThesisOS cannot verify.
 8. **GPT-5.6 build proof (2:30–2:50):** Show the primary Codex task, feedback receipt, one implementation diff, and the passing test result. State that Codex with GPT-5.6 built the submitted project; the optional runtime API adapter is separate.
 9. **Close (2:50–3:00):** “ChatGPT gives you text. ThesisOS gives you proof: every comment traceable, every citation from a paper you approved.”
 
@@ -26,6 +26,7 @@ Open `http://127.0.0.1:4173`.
 - [x] Screenshot: task graph from messy supervisor feedback (`docs/assets/judge-task-approval.png`).
 - [x] Screenshot: judge retrieval results with abstract coverage, threshold, fallback mode, and match provenance (`docs/assets/judge-retrieval.png`).
 - [x] Screenshot: grounded note with stable source-ID citations (`docs/assets/judge-grounded-note.png`).
+- [ ] Screenshot/video moment: Claim Traceback showing a source note → evidence → task → feedback.
 - [ ] Screenshot/video moment: Revision Response Matrix downloaded from the canonical workflow.
 - [ ] Screenshot/video moment: rejected task cannot search (include during the narrated recording).
 - [x] GPT-5.6 build feedback receipt preserved (`docs/assets/codex-feedback-receipt.png`).
