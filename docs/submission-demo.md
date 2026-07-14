@@ -30,6 +30,7 @@ Open `http://127.0.0.1:4173`.
 - [x] GPT-5.6 build feedback receipt preserved (`docs/assets/codex-feedback-receipt.png`).
 - [ ] Upload `docs/assets/thesisos-demo.mp4` as a public YouTube video under three minutes.
 - [x] Main Codex GPT-5.6 build and `/feedback` ID verified: `019f5cc1-08be-7071-a5ea-220a8de0f313`.
+- [x] Real Chrome judge workflow verified with `npm run test:browser`, including canonical reload recovery.
 - [x] Education track verified on the [official Build Week page](https://openai.devpost.com/); select it on the authenticated submission form.
 - [ ] Confirm repository visibility and final `main` commit.
 

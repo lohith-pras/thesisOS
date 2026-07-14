@@ -8,6 +8,14 @@ npm run check:frontend
 npm test
 ```
 
+## Browser-level judge workflow
+
+```bash
+npm run test:browser
+```
+
+This launches a real headless Chrome session against isolated judge-mode state and verifies feedback decomposition, approval, fixture retrieval, evidence attachment, deterministic grounded drafting, stable source IDs, and recovery after a page reload. On macOS it uses Google Chrome by default; set `CHROME_PATH` to another Chrome or Chromium binary when needed.
+
 ## Offline artifact path
 
 ```bash
@@ -50,6 +58,6 @@ OPENAI_API_KEY="your-key" npm run demo -- --ai \
   --feedback "Compare the literature" --output-dir ./demo-output/openai-run
 ```
 
-## Website smoke test
+## Manual website smoke test
 
 Run `npm run app -- --demo` and verify: task approval, rejected-task refusal, semantic retrieval notice, evidence selection, navigation to Evidence notes, Codex drafting or local fallback, preview, and judge-mode write refusal.

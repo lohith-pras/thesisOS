@@ -68,6 +68,7 @@ test("projects the canonical workflow read model for a feedback thread", () => {
   }, { searchArtifact });
   const workflow = workflowReadModel(attached, "feedback-1");
   assert.equal(workflow.feedback, "Review the literature evidence.");
+  assert.equal(workflow.taskGraph.createdAt, "2026-07-14T00:00:00.000Z");
   assert.equal(workflow.selectedEvidence[0].sourceId, "group:1:A");
   assert.equal(workflow.nextAllowedAction.id, "draft-evidence-note");
 });

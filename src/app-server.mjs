@@ -414,8 +414,8 @@ export function createAppServer(dependencies = {}) {
           try {
             const state = reviewCanonicalTask(await loadCanonicalState(), body);
             await persistCanonicalState(state);
-            const thread = state.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
-            sendJson(response, 200, { state, taskGraph: { schemaVersion: 1, feedback: thread.feedback, tasks: thread.tasks, nextAction: "Run approved work" } });
+            const workflow = workflowReadModel(state, body.feedbackThreadId);
+            sendJson(response, 200, { state, taskGraph: workflow.taskGraph });
           } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
           return;
         }
@@ -436,7 +436,7 @@ export function createAppServer(dependencies = {}) {
           const thread = state.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
           if (!thread) throw httpError(404, "Feedback thread was not found.");
           const context = buildThesisContext(state, "retrieval", { feedback: thread.feedback });
-          const taskGraph = { schemaVersion: 1, feedback: thread.feedback, tasks: thread.tasks, nextAction: "Search approved evidence" };
+          const taskGraph = workflowReadModel(state, thread.id).taskGraph;
           const query = typeof body.query === "string" && body.query.trim() ? body.query.trim() : context.query;
           if (body.mode === "demo") sendJson(response, 200, await searchDemo(taskGraph, { query }));
           else {
