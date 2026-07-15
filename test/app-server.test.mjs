@@ -955,8 +955,10 @@ test("frontend provides a state-aware guide only for the demo workflow", async (
   assert.match(source, /fixture:demo:UNSELECTED/);
   assert.match(source, /proofline:test:UNSELECTED/);
   assert.match(source, /Proofline blocked a citation outside this note’s selected evidence/);
-  assert.match(source, /No preview was created and nothing was saved/);
+  assert.match(source, /Existing valid preview is unchanged\. No file write was attempted/);
   assert.match(source, /Show technical ID/);
+  assert.match(source, /completed\.filter\(Boolean\)\.length} OF 5/);
+  assert.match(source, /const proofPanel = state\.connection\.mode === "demo" \? citationBoundaryProofPanel\(\) : ""/);
 });
 
 test("workspace launching avoids the Windows command shell", async () => {

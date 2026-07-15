@@ -94,6 +94,7 @@ try {
   await waitUntil(call, "document.querySelector('.note-preview') !== null");
   await waitUntil(call, "document.querySelector('.claim-traceback-result') !== null");
   await waitUntil(call, "document.querySelector('.claim-traceback-result').textContent.includes('Supervisor asked:')");
+  await waitUntil(call, "document.querySelector('.demo-guide-head .label')?.textContent.includes('4 OF 5')");
   const selectedSourceId = await evaluate(call, "document.querySelector('.claim-traceback-result code').textContent");
   if (!VERIFY_ONLY) {
     await screenshotElement(call, ".note-workflow", "judge-grounded-note.png");
@@ -103,9 +104,9 @@ try {
 
   await waitUntil(call, "document.querySelector('[data-action=\"test-citation-boundary\"]') !== null");
   await evaluate(call, "document.querySelector('[data-action=\"test-citation-boundary\"]').click()");
-  await waitUntil(call, "document.querySelector('.citation-boundary-proof')?.textContent.includes('Proofline blocked a citation outside this note’s selected evidence') && document.querySelector('.citation-boundary-proof')?.textContent.includes('No preview was created and nothing was saved')");
+  await waitUntil(call, "document.querySelector('.page-content > .citation-boundary-proof')?.textContent.includes('Proofline blocked a citation outside this note’s selected evidence') && document.querySelector('.page-content > .citation-boundary-proof')?.textContent.includes('Existing valid preview is unchanged. No file write was attempted')");
   if (!VERIFY_ONLY) {
-    await screenshotElement(call, ".demo-guide", "judge-citation-rejection.png");
+    await screenshotElement(call, ".page-content > .citation-boundary-proof", "judge-citation-rejection.png");
     console.log("Captured citation rejection");
   }
 
