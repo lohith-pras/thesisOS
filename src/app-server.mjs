@@ -18,7 +18,7 @@ import { createDeterministicDraft, draftEvidenceNoteWithOpenAI } from "./core/no
 import { createDemoGroundedDraft, createDemoProjectState, DEMO_FEEDBACK_OPTIONS, decomposeDemoFeedback, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
 import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
 import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault, pickFolder } from "./core/obsidian-vault.mjs";
-import { acceptProfileProposal, answerProfileQuestions, consolidateFeedbackThreads, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordProjectDocument, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
+import { acceptProfileProposal, answerProfileQuestions, consolidateFeedbackThreads, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordProjectDocument, renameProject, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
 import { scanThesisCheckout } from "./core/thesis-scan.mjs";
 import { extractProjectDocument } from "./core/project-document.mjs";
 import { proposeProfileWithCodex, proposeProfileWithOpenAI } from "./core/profile-extraction.mjs";
@@ -36,6 +36,7 @@ import { reconcileSeedReferences } from "./core/seed-reference-reconciliation.mj
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_DIR = resolve(SOURCE_DIR, "..");
 const APP_DIR = resolve(WORKSPACE_DIR, "app");
+const LANDING_DIR = resolve(WORKSPACE_DIR, "landing");
 const MAX_REQUEST_BODY_SIZE = 1 * 1024 * 1024;
 const MAX_DOCUMENT_UPLOAD_BODY_SIZE = 28 * 1024 * 1024;
 const CONTENT_TYPES = new Map([
@@ -140,10 +141,9 @@ function httpError(statusCode, message) {
   return Object.assign(new Error(message), { statusCode });
 }
 
-async function serveApp(pathname, response) {
-  const relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  const filePath = resolve(APP_DIR, relativePath);
-  if (!filePath.startsWith(`${APP_DIR}/`) && filePath !== resolve(APP_DIR, "index.html")) {
+async function serveStatic(rootDir, relativePath, response) {
+  const filePath = resolve(rootDir, relativePath);
+  if (!filePath.startsWith(`${rootDir}/`) && filePath !== resolve(rootDir, "index.html")) {
     response.writeHead(403).end("Forbidden");
     return;
   }
@@ -319,6 +319,15 @@ export function createAppServer(dependencies = {}) {
         }
         await persistCanonicalState(state);
         sendJson(response, 200, { state, readiness: profileReadiness(state) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/project/settings") {
+        const body = await readJsonBody(request);
+        try {
+          const state = renameProject(await loadCanonicalState(), { name: body.project, expectedRevision: body.expectedRevision });
+          await persistCanonicalState(state);
+          sendJson(response, 200, { state, readiness: profileReadiness(state) });
+        } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/documents/import") {
@@ -718,7 +727,23 @@ export function createAppServer(dependencies = {}) {
         response.writeHead(405, { Allow: "GET, HEAD" }).end();
         return;
       }
-      await serveApp(url.pathname, response);
+      if (url.pathname === "/" || url.pathname === "/index.html") {
+        await serveStatic(LANDING_DIR, "index.html", response);
+        return;
+      }
+      if (url.pathname === "/app") {
+        response.writeHead(302, { Location: "/app/" }).end();
+        return;
+      }
+      if (url.pathname.startsWith("/app/")) {
+        await serveStatic(APP_DIR, url.pathname.slice("/app/".length) || "index.html", response);
+        return;
+      }
+      if (url.pathname.startsWith("/landing/")) {
+        await serveStatic(LANDING_DIR, url.pathname.slice("/landing/".length), response);
+        return;
+      }
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Not found");
     } catch (error) {
       if (error.code === "REVISION_REQUIRED") {
         sendJson(response, 400, { status: "invalid_request", code: error.code, message: error.message });

@@ -362,6 +362,19 @@ export function updateProjectPaths(state, input, options = {}) {
   });
 }
 
+export function renameProject(state, input, options = {}) {
+  validateProjectState(state);
+  expectRevision(state, input.expectedRevision);
+  const now = options.now ?? new Date().toISOString();
+  const name = requireText(input.name, "Project name");
+  return validateProjectState({
+    ...state,
+    revision: state.revision + 1,
+    project: { ...state.project, name },
+    events: [...state.events, event("project.renamed", now, { name })]
+  });
+}
+
 export function createProfileProposal(state, proposal, options = {}) {
   validateProjectState(state);
   expectRevision(state, options.expectedRevision);

@@ -12,6 +12,7 @@
     "app:demo": "THESISOS_PORT=4174 node src/app-server.mjs --demo",
     "workspace": "node src/workspace-cli.mjs",
     "eval:retrieval": "node src/retrieval-eval-cli.mjs",
+    "eval:citations": "node src/citation-eval-cli.mjs",
     "capture:submission": "node scripts/capture-submission.mjs",
     "test:browser": "node scripts/capture-submission.mjs --verify",
     "render:video": "node scripts/render-demo-video.mjs",

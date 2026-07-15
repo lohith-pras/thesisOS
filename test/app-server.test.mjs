@@ -38,6 +38,21 @@ test("parses the one-command judge mode flag", async () => {
   assert.throws(() => parseAppArgs(["--unknown"]), /Unknown app option/);
 });
 
+test("serves the landing page at root and the workspace under /app/", async () => {
+  await withServer({}, async (baseUrl) => {
+    const landing = await fetch(`${baseUrl}/`);
+    const workspace = await fetch(`${baseUrl}/app/`);
+    const landingCss = await fetch(`${baseUrl}/landing/styles.css`);
+
+    assert.equal(landing.status, 200);
+    assert.match(await landing.text(), /site-shell/);
+    assert.equal(workspace.status, 200);
+    assert.match(await workspace.text(), /app-shell/);
+    assert.equal(landingCss.status, 200);
+    assert.match(landingCss.headers.get("content-type"), /text\/css/);
+  });
+});
+
 test("serves real Zotero connection status and papers to the frontend", async () => {
   await withServer({
     projectDir: process.cwd(),
@@ -826,7 +841,7 @@ test("frontend promotes attached evidence to a dedicated Codex notes step", asyn
   assert.match(source, /Building the grounded note preview/);
 });
 
-test("frontend uses a quiet marker for async activity", async () => {
+test("frontend uses an accessible, operation-specific activity indicator", async () => {
   const source = await readFile(resolve("app/app.js"), "utf8");
   const styles = await readFile(resolve("app/styles.css"), "utf8");
 
@@ -838,10 +853,10 @@ test("frontend uses a quiet marker for async activity", async () => {
   assert.match(source, /Saving your review decision/);
   assert.match(source, /Saving the approved note to Obsidian/);
   assert.match(source, /activity-marker/);
-  assert.doesNotMatch(source, /activity-dots/);
+  assert.match(source, /activity-marker.*<i><\/i><i><\/i><i><\/i>/);
   assert.match(styles, /prefers-reduced-motion:reduce/);
-  assert.doesNotMatch(styles, /@keyframes activity-dot/);
-  assert.doesNotMatch(styles, /animation:activity-dot/);
+  assert.match(styles, /@keyframes activity-dot/);
+  assert.match(styles, /animation:activity-dot/);
 });
 
 test("frontend closes task modals with keyboard support and restores focus", async () => {
@@ -936,8 +951,12 @@ test("frontend provides a state-aware guide only for the demo workflow", async (
   assert.match(source, /demoGuideHidden/);
   assert.match(source, /seed-demo-feedback/);
   assert.match(source, /show-demo-proof/);
-  assert.match(source, /test-demo-rejection/);
+  assert.match(source, /test-citation-boundary/);
   assert.match(source, /fixture:demo:UNSELECTED/);
+  assert.match(source, /proofline:test:UNSELECTED/);
+  assert.match(source, /Proofline blocked a citation outside this note’s selected evidence/);
+  assert.match(source, /No preview was created and nothing was saved/);
+  assert.match(source, /Show technical ID/);
 });
 
 test("workspace launching avoids the Windows command shell", async () => {

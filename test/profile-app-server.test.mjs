@@ -76,6 +76,22 @@ test("links and scans an optional manuscript after project creation", async () =
   });
 });
 
+test("renames a workspace through the revision-guarded settings endpoint", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-settings-"));
+  await withServer({ projectDir }, async (base) => {
+    const initialized = await post(base, "/api/project/init", { project: "Initial research" });
+    const renamed = await post(base, "/api/project/settings", { project: "Renewable-grid study", expectedRevision: initialized.body.state.revision });
+    assert.equal(renamed.response.status, 200);
+    assert.equal(renamed.body.state.project.name, "Renewable-grid study");
+    assert.equal(renamed.body.state.revision, initialized.body.state.revision + 1);
+    assert.equal(renamed.body.state.events.at(-1).type, "project.renamed");
+
+    const stale = await post(base, "/api/project/settings", { project: "Stale rename", expectedRevision: initialized.body.state.revision });
+    assert.equal(stale.response.status, 409);
+    assert.match(stale.body.message, /STATE_STALE/);
+  });
+});
+
 test("opens only the configured Obsidian vault or VS Code manuscript folder", async () => {
   const projectDir = await mkdtemp(join(tmpdir(), "thesisos-workspace-launch-"));
   const thesisDir = join(projectDir, "thesis");

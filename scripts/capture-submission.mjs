@@ -76,7 +76,7 @@ try {
   if (!VERIFY_ONLY) await mkdir(ASSETS, { recursive: true });
   await waitFor(`http://127.0.0.1:${PORT}/api/zotero/status`);
   await waitFor(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
-  const page = await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/new?http://127.0.0.1:${PORT}`, { method: "PUT" })).json();
+  const page = await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/new?http://127.0.0.1:${PORT}/app/`, { method: "PUT" })).json();
   const socket = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((resolveOpen, rejectOpen) => { socket.addEventListener("open", resolveOpen, { once: true }); socket.addEventListener("error", rejectOpen, { once: true }); });
   const call = cdp(socket);
@@ -101,9 +101,9 @@ try {
     console.log("Captured grounded note and Claim Traceback");
   }
 
-  await waitUntil(call, "document.querySelector('[data-action=\"test-demo-rejection\"]') !== null");
-  await evaluate(call, "document.querySelector('[data-action=\"test-demo-rejection\"]').click()");
-  await waitUntil(call, "document.querySelector('.demo-proof-status')?.textContent.includes('Unselected citation rejected')");
+  await waitUntil(call, "document.querySelector('[data-action=\"test-citation-boundary\"]') !== null");
+  await evaluate(call, "document.querySelector('[data-action=\"test-citation-boundary\"]').click()");
+  await waitUntil(call, "document.querySelector('.citation-boundary-proof')?.textContent.includes('Proofline blocked a citation outside this note’s selected evidence') && document.querySelector('.citation-boundary-proof')?.textContent.includes('No preview was created and nothing was saved')");
   if (!VERIFY_ONLY) {
     await screenshotElement(call, ".demo-guide", "judge-citation-rejection.png");
     console.log("Captured citation rejection");

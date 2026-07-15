@@ -64,6 +64,8 @@ npm run app
 
 The live path uses the read-only Zotero Desktop API and your authenticated Codex CLI session. Check authentication with `codex login status`.
 
+To show the live loop: create or open a local research workspace, connect Zotero Desktop, add feedback, approve a literature task, search and select your own papers, then prepare a note preview. In **Evidence notes**, choose **Verify citation boundary**. It submits a deliberately invalid local test source ID against your selected evidence; the server rejects it before preview and no Zotero item, note, or file is changed.
+
 Proofline runs on macOS, Windows, and Linux with Node.js 22+. The optional submission-media helpers (`npm run render:video` and `npm run capture:submission`) are macOS development scripts: they use macOS `say`, the default macOS Chrome path, and external `ffmpeg`/ImageMagick tooling.
 
 ## Website walkthrough
