@@ -1,59 +1,91 @@
-PROOFLINE — 90-SECOND DEMO SCRIPT
+PROOFLINE — 2:40 SUBMISSION DEMO SCRIPT
+
+This is one complete, under-three-minute recording path. It uses the labelled,
+deterministic judge demo so a reviewer can repeat it without Zotero, model
+credentials, or filesystem writes.
 
 Before recording
 - Run: npm run app -- --demo
 - Open: http://127.0.0.1:4173
-- Use one browser window at 100% zoom; silence notifications.
-- Start on Overview with the DEMO SESSION badge visible.
-- Keep the Codex feedback receipt and `npm test` result ready in separate tabs.
+- Use one 16:9 browser window at 100% zoom. Turn on Do Not Disturb and close
+  unrelated tabs.
+- Keep the Codex feedback receipt and a passing npm test result in two separate
+  tabs. Do not show credentials, real Zotero data, or local paths.
+- Start on Overview. Keep the “DEMO SESSION · ISOLATED DATA” badge visible in
+  the first shot.
 
-0:00–0:10 — The problem
-Screen: Overview. Keep the demo badge and empty review trail visible.
-Say: “Reviewer feedback names a problem, not the paper that proves it.”
-Say: “Proofline turns that comment into an evidence trail the researcher can inspect.”
+0:00–0:13 — Hook: the thesis-revision problem
+Screen: Overview. Keep the demo-session badge and “Show completed proof” button visible.
+Say: “A supervisor says, ‘Strengthen this claim.’ That comment names a problem,
+not the paper that proves it.”
+Say: “Proofline turns feedback into a reviewable, evidence-backed research trail.”
 
-0:10–0:18 — The connected workspace
-Screen: Open Connections. Hold on the VS Code, Obsidian, and Overleaf cards.
-Say: “Proofline connects the work around research: VS Code, Obsidian, and Overleaf.”
-Say: “Each is optional, project-scoped, and stays under the researcher’s control.”
+0:13–0:25 — Open the finished, repeatable proof
+Screen: Click “Show completed proof.” Wait for Evidence notes to load.
+Say: “For this demo, I use a deterministic fixture replay. It is clearly
+labelled, needs no credentials, and cannot write files.”
 
-0:18–0:23 — Set up the wow moment
-Screen: Click “Show completed proof.” Pause while the Evidence notes view loads.
-Say: “For judges, this deterministic replay opens the complete, approval-gated path in one click.”
+0:25–0:46 — Show selected evidence and the grounded note
+Screen: Hold on the Evidence Brief and its source cards. If needed, scroll so
+the feedback, synthesis, and selected source cards are readable.
+Say: “The researcher selects the evidence. This fixture note is grounded only
+in those selected records, and the draft remains a preview.”
+Say: “In a real workspace, the same boundary applies to Zotero: it stays
+read-only, and saving a note is a separate approval.”
 
-0:23–0:38 — Claim Traceback (primary wow moment)
-Screen: Hold on Claim Traceback. Slowly reveal its four steps.
-Pause: 2 seconds before speaking.
-Say: “This is the proof: one draft statement, its selected paper, approved task, and original feedback.”
-Say: “Every link is drawn from canonical local state—not a generated story.”
+0:46–1:10 — Claim Traceback: the primary proof moment
+Screen: In Claim Traceback, click “Trace source 1,” then hold on all four rows.
+Say: “Claim Traceback makes one draft statement inspectable. It follows the
+selected paper, the approved research task, and the original supervisor
+feedback.”
+Say: “This is provenance stored in the local project state—not a story the
+model generated after the fact.”
 
-0:38–0:49 — Grounded note
-Screen: Show the grounded note preview and the stable source ID.
-Say: “The note only uses papers the researcher selected as evidence.”
-Say: “In a real vault, Obsidian receives this note only after a separate approval.”
+1:10–1:38 — Citation boundary: make the refusal visible
+Screen: Click “Test an unselected citation.” Hold on the full green “DEMO PROOF
+· CITATION CHECK” panel for at least three seconds. Leave all three numbered
+columns readable.
+Say: “Now I submit a deliberately invalid source ID that was never selected as
+evidence.”
+Say: “Proofline rejects the attempted replacement draft. The existing grounded
+preview is unchanged, and no file write is attempted.”
+Say: “This demonstrates the citation boundary: a draft cannot cite a source
+outside this note’s selected evidence.”
 
-0:49–1:01 — Boundary proof
-Screen: Click “Test citation boundary.” Hold on the green rejection confirmation.
-Pause: 2 seconds after the confirmation appears.
-Say: “Now I inject an unselected citation. Proofline refuses it before preview.”
-Say: “That boundary is enforced, demonstrated, and covered by tests.”
+1:38–1:55 — Explain the authority boundary
+Screen: Keep the citation-proof panel on screen, then briefly show the
+“Judge mode stops at preview” message in Evidence Notes.
+Say: “The check proves source selection, not that a paper’s findings are true.
+And judge mode deliberately stops before any filesystem write.”
 
-1:01–1:12 — Review trail
-Screen: Return to Overview and open the Revision Response Matrix.
-Say: “The response matrix gives a supervisor the same trail: comment, task, evidence, and note status.”
+1:55–2:12 — Reviewer-facing outcome
+Screen: Click Overview. Open the Revision Response Matrix and hold on its
+feedback, task, source, and status columns.
+Say: “The Revision Response Matrix gives the supervisor the same accountable
+trail: the comment, approved task, selected evidence, and grounded-note status.”
 
-1:12–1:22 — Build proof
-Screen: Show the Codex feedback receipt, then the passing `npm test` terminal result.
-Say: “Codex with GPT-5.6 built the submitted project. Runtime model choice stays separate and visible.”
+2:12–2:23 — Local-first integrations
+Screen: Click Connections. Hold on the Zotero, VS Code, Obsidian, and Overleaf
+cards.
+Say: “Proofline connects the work around research without taking control of it:
+Zotero is read-only, Obsidian writes need approval, and Overleaf is URL-only.”
 
-1:22–1:30 — Close
-Screen: Return to Claim Traceback.
-Say: “Chat tools generate text. Proofline generates proof: every citation comes from evidence you approved.”
+2:23–2:35 — Build proof
+Screen: Show the Codex feedback receipt, then the passing npm test result.
+Say: “I built Proofline with Codex and GPT-5.6. The project includes a
+deterministic demo and automated browser verification of this exact proof path.”
+
+2:35–2:40 — Close
+Screen: Return to the citation-proof panel or Claim Traceback.
+Say: “Chat tools generate text. Proofline generates proof: evidence before AI
+writing.”
 
 Recording checklist
-- The “DEMO SESSION · ISOLATED DATA” label is visible at least once.
+- The demo-session label is visible at least once.
+- The demo is described as a fixture, not as a real Zotero library.
 - Claim Traceback appears before the halfway point.
-- The citation-rejection confirmation is readable and held for two seconds.
-- Do not claim that the demo writes to Obsidian; it deliberately cannot.
-- Say that Overleaf is URL-only: Proofline opens the researcher’s project but never signs in or syncs it.
-- Export or show the response matrix only after explaining it is read-only.
+- The citation-proof panel is held long enough to read all three columns.
+- Use the precise claim: the invalid draft is rejected, the valid preview stays
+  unchanged, and no write is attempted.
+- Do not claim that the demo writes to Obsidian or that Proofline edits Overleaf.
+- Keep the finished video below 3:00, including any title card.

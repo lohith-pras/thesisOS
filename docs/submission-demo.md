@@ -10,15 +10,15 @@ Open `http://127.0.0.1:4173`.
 
 ## Under-three-minute recording script
 
-1. **Problem and thesis context (0:00–0:25):** Open the Profile view. Show the demo thesis: workplace EV charging flexibility for distribution-grid congestion management, its two objectives, focused scope, and literature stage. State that the demo library contains real publication metadata, but is clearly labelled fixture data.
-2. **Feedback choices (0:25–0:45):** On Overview, show the three demo choices: vague framing, challenge a claim, and test feasibility. Choose **Challenge a claim** to demonstrate a reviewer asking the student to qualify an over-strong statement.
-3. **Bounded tasks (0:45–1:05):** Generate tasks. Show that judge mode proposes only the two available workflow steps: read-only Zotero evidence review and an Obsidian evidence note—no simulated thesis-repository task.
-4. **Grounded retrieval (1:05–1:30):** Approve the literature task and search the smart-EV-charging fixture. Point out the match reason, DOI, and stable source ID.
-5. **Evidence boundary (1:30–1:50):** Select two papers with contrasting evidence and attach them. Explain that only selected stable source IDs can enter drafting.
-6. **Readable evidence note and Claim Traceback (1:50–2:20):** Draft the note. Show the evidence-note review view: original feedback, synthesis, individual source cards, and expandable raw Markdown. Click Claim Traceback and show source note → selected Zotero evidence → approved task → original feedback. If time is short, **Show completed proof** lands directly on this completed fixture state; **Test citation boundary** visibly rejects an unselected fixture source.
-7. **Trust payoff and matrix (2:20–2:40):** Mention that judge mode stops before filesystem writing, then download the Revision Response Matrix. Show comment → task → selected source IDs → grounded-note status.
-8. **GPT-5.6 build proof (2:30–2:50):** Show the primary Codex task, feedback receipt, one implementation diff, and the passing test result. State that Codex with GPT-5.6 built the submitted project; the optional runtime API adapter is separate.
-9. **Close (2:50–3:00):** “ChatGPT gives you text. Proofline gives you proof: every comment traceable, every citation from a paper you approved.”
+1. **Hook (0:00–0:13):** On Overview, show the **DEMO SESSION · ISOLATED DATA** label and say that supervisor feedback identifies a problem, not the paper that proves it.
+2. **Repeatable proof (0:13–0:25):** Click **Show completed proof**. State that the labelled deterministic fixture requires no credentials and cannot write files.
+3. **Grounded evidence note (0:25–0:46):** Show the Evidence Brief, synthesis, and selected fixture source cards. State that the real workflow admits only researcher-selected Zotero evidence, and that a real vault write needs separate approval.
+4. **Claim Traceback (0:46–1:10):** Click **Trace source 1**. Show its draft statement → selected paper → approved task → original feedback path.
+5. **Visible citation rejection (1:10–1:38):** Click **Test an unselected citation** and hold on the full **DEMO PROOF · CITATION CHECK** panel. State precisely: “The invalid draft is rejected; the existing valid preview is unchanged; no file write is attempted.”
+6. **Authority boundary (1:38–1:55):** Show that judge mode stops at preview. Explain that the check verifies selected-source enforcement, not the truth of a paper’s findings.
+7. **Reviewer outcome (1:55–2:12):** Open the Revision Response Matrix from Overview and show comment → approved task → selected evidence → grounded-note status.
+8. **Local-first integrations (2:12–2:23):** Briefly show Connections: Zotero is read-only, Obsidian needs write approval, and Overleaf is URL-only.
+9. **Build proof and close (2:23–2:40):** Show the GPT-5.6 Codex feedback receipt and passing test result, then return to the citation-proof panel. Close: “Chat tools generate text. Proofline generates proof: evidence before AI writing.”
 
 ## Required capture checklist
 
