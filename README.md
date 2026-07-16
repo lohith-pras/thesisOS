@@ -86,7 +86,6 @@ Build-time GPT-5.6 usage and runtime model selection are separate. The detailed 
 ## Why you can use it on real research
 
 - **Search boundary:** Proofline reads Zotero metadata but cannot alter the library.
-- **Measured retrieval:** the included five-query fixture reports recall@5 of **0.83** and mean reciprocal rank of **1.0**; it is a small regression check, not a general performance claim.
 - **Evidence boundary:** drafting receives only reviewed evidence, and drafts containing unselected source IDs are rejected.
 - **Write boundary:** notes are previewed before a separate filesystem approval; judge mode cannot write at all.
 - **Revision boundary:** response-matrix exports are read-only views of the canonical approval and evidence trail.
