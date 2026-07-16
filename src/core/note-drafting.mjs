@@ -1,5 +1,5 @@
 const API_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_MODEL = "gpt-5.6";
+const DEFAULT_MODEL = "gpt-5.6-sol";
 import { assertEvidenceNoteStyle, EVIDENCE_NOTE_WRITING_INSTRUCTIONS } from "./evidence-note-style.mjs";
 export const DRAFT_SCHEMA = { type: "object", additionalProperties: false, required: ["overview", "sourceNotes"], properties: { overview: { type: "string" }, sourceNotes: { type: "array", items: { type: "object", additionalProperties: false, required: ["sourceId", "summary", "relevance"], properties: { sourceId: { type: "string" }, summary: { type: "string" }, relevance: { type: "string" } } } } } };
 

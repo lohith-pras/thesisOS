@@ -16,10 +16,19 @@ import { renderWorkspace, writeWorkspace } from "./core/workspace-renderer.mjs";
 import { proposeClaimEvidenceLinksWithCodex } from "./core/claim-proposals.mjs";
 
 const COMMANDS = new Set(["init", "scan", "propose", "review", "render", "status"]);
+const REVISION_GUARDED_COMMANDS = new Set(["scan", "propose", "review"]);
 
 function absolute(value, label) {
   if (!value) throw new Error(`${label} is required.`);
   return resolve(value);
+}
+
+function revision(value) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error("--expected-revision must be a positive integer.");
+  }
+  return parsed;
 }
 
 export function parseWorkspaceArgs(args) {
@@ -39,6 +48,7 @@ export function parseWorkspaceArgs(args) {
     else if (arg === "--vault") options.vaultPath = resolve(value);
     else if (arg === "--sources-file") options.sourcesFile = resolve(value);
     else if (arg === "--model") options.model = value;
+    else if (arg === "--expected-revision") options.expectedRevision = revision(value);
     else if (arg === "--approve") { options.claimId = value; options.decision = "approved"; }
     else if (arg === "--reject") { options.claimId = value; options.decision = "rejected"; }
     else throw new Error(`Unknown option '${arg}'.`);
@@ -50,6 +60,9 @@ export function parseWorkspaceArgs(args) {
     options.vaultPath = absolute(options.vaultPath, "--vault");
   }
   if (command === "review" && (!options.claimId || !options.decision)) throw new Error("review requires --approve or --reject.");
+  if (REVISION_GUARDED_COMMANDS.has(command) && options.expectedRevision === undefined) {
+    throw new Error(`${command} requires --expected-revision from the current canonical state.`);
+  }
   return options;
 }
 
@@ -68,12 +81,19 @@ function statePath(options) {
   return resolve(options.projectDir, ".thesisos", "thesis-state.json");
 }
 
-async function scanAndSave(state, path, sources) {
+async function scanAndSave(state, path, sources, expectedRevision, persistOptions = { expectedRevision }) {
   const scan = await scanThesisCheckout(state.project.thesisDir);
   const mapping = mapBibliographyToSources(scan.bibliography, sources);
-  const updated = updateProjectScan(state, { scan, mapping, sources });
-  await saveProjectState(path, updated);
+  const updated = updateProjectScan(state, { scan, mapping, sources }, { expectedRevision });
+  await saveProjectState(path, updated, persistOptions);
   return updated;
+}
+
+function assertCurrentRevision(state, expectedRevision) {
+  if (expectedRevision === state.revision) return;
+  const error = new Error(`STATE_STALE: expected revision ${expectedRevision}, current revision is ${state.revision}.`);
+  error.code = "STATE_STALE";
+  throw error;
 }
 
 export async function main(args = process.argv.slice(2), dependencies = {}) {
@@ -81,22 +101,24 @@ export async function main(args = process.argv.slice(2), dependencies = {}) {
   const log = dependencies.log ?? console.log;
   const path = statePath(options);
   if (options.command === "init") {
-    let state;
     if (await exists(path)) {
-      state = await loadProjectState(path);
-      state = { ...state, project: { ...state.project, name: options.project.trim(), thesisDir: options.thesisDir, vaultPath: options.vaultPath } };
-    } else state = createProjectState({ project: options.project, thesisDir: options.thesisDir, vaultPath: options.vaultPath });
+      throw new Error(`Canonical state already exists at ${path}. Use a revision-guarded command to change it.`);
+    }
+    let state = createProjectState({ project: options.project, thesisDir: options.thesisDir, vaultPath: options.vaultPath });
     const sources = await readSources(options.sourcesFile, state.sources ?? []);
-    state = await scanAndSave(state, path, sources);
+    state = await scanAndSave(state, path, sources, state.revision, { expectedRevision: 0, expectAbsent: true });
     log(`Canonical state initialized: ${path}`);
     log(`${state.manuscript.chapters.length} chapters · ${state.manuscript.citations.length} citations · ${state.manuscript.unresolvedCitekeys.length} unresolved citekeys`);
     return state;
   }
 
   let state = await loadProjectState(path);
+  if (REVISION_GUARDED_COMMANDS.has(options.command)) {
+    assertCurrentRevision(state, options.expectedRevision);
+  }
   if (options.command === "scan") {
     const sources = await readSources(options.sourcesFile, state.sources ?? state.evidence);
-    state = await scanAndSave(state, path, sources);
+    state = await scanAndSave(state, path, sources, options.expectedRevision);
     log(`Canonical state updated: ${path}`);
     return state;
   }
@@ -114,15 +136,16 @@ export async function main(args = process.argv.slice(2), dependencies = {}) {
       provider: "codex",
       model: options.model ?? "codex-default",
       approvedExternalProcessing: options.approvedExternalProcessing,
+      expectedRevision: options.expectedRevision,
       knownSourceIds: state.evidence.map(({ sourceId }) => sourceId)
     });
-    await saveProjectState(path, state);
+    await saveProjectState(path, state, { expectedRevision: options.expectedRevision });
     log(`${proposals.length} claim–evidence proposals recorded for review.`);
     return state;
   }
   if (options.command === "review") {
-    state = approveClaimProposal(state, options.claimId, options.decision);
-    await saveProjectState(path, state);
+    state = approveClaimProposal(state, options.claimId, options.decision, { expectedRevision: options.expectedRevision });
+    await saveProjectState(path, state, { expectedRevision: options.expectedRevision });
     log(`Claim ${options.claimId}: ${options.decision}`);
     return state;
   }
@@ -132,6 +155,7 @@ export async function main(args = process.argv.slice(2), dependencies = {}) {
     return result;
   }
   const summary = {
+    revision: state.revision,
     approved: state.claims.filter(({ status }) => status === "approved").length,
     proposed: state.claims.filter(({ status }) => status === "proposed").length,
     rejected: state.claims.filter(({ status }) => status === "rejected").length,

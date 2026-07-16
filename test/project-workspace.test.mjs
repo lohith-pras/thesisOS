@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,7 +9,8 @@ import {
   createProjectState,
   loadProjectState,
   recordClaimProposals,
-  saveProjectState
+  saveProjectState,
+  updateProjectScan
 } from "../src/core/project-state.mjs";
 import { scanThesisCheckout } from "../src/core/thesis-scan.mjs";
 import { mapBibliographyToSources } from "../src/core/citation-mapping.mjs";
@@ -55,13 +56,16 @@ test("persists canonical state and appends immutable review events", async () =>
     sourceIds: ["group:1:ABC"],
     feedbackThreadIds: [],
     taskIds: []
-  }], { provider: "codex", model: "gpt-5", approvedExternalProcessing: true, now: "2026-07-14T10:01:00.000Z", knownSourceIds: ["group:1:ABC"] });
-  state = approveClaimProposal(state, "claim-001", "approved", { now: "2026-07-14T10:02:00.000Z", actor: "researcher" });
+  }], { provider: "codex", model: "gpt-5", approvedExternalProcessing: true, expectedRevision: 1, now: "2026-07-14T10:01:00.000Z", knownSourceIds: ["group:1:ABC"] });
+  state = approveClaimProposal(state, "claim-001", "approved", { expectedRevision: 2, now: "2026-07-14T10:02:00.000Z", actor: "researcher" });
 
-  await saveProjectState(statePath, state);
+  await saveProjectState(statePath, state, { expectedRevision: 0, expectAbsent: true });
   const loaded = await loadProjectState(statePath);
 
+  assert.equal((await stat(statePath)).mode & 0o077, 0);
+  assert.equal((await stat(join(root, ".thesisos"))).mode & 0o077, 0);
   assert.equal(loaded.claims[0].status, "approved");
+  assert.equal(loaded.revision, 3);
   assert.deepEqual(loaded.events.map((event) => event.type), ["project.created", "claims.proposed", "claim.reviewed"]);
   assert.equal(loaded.events[2].previousStatus, "proposed");
 });
@@ -79,6 +83,30 @@ test("scans LaTeX and maps bibliography citekeys to Zotero sources without Bette
   assert.equal(mapping.entries.doe2025.sourceId, "group:1:ABC");
   assert.equal(mapping.entries.doe2025.matchedBy, "doi");
   assert.equal(mapping.entries.missing2024.status, "unresolved");
+});
+
+test("revision-guards scans and preserves selected workflow evidence", () => {
+  const original = createProjectState({ project: "Test thesis" });
+  const workflowEvidence = {
+    feedbackThreadId: "feedback-1",
+    taskId: "task-literature",
+    sourceId: "group:1:WORKFLOW",
+    title: "Selected workflow evidence",
+    selectedAt: "2026-07-14T10:00:00.000Z"
+  };
+  const state = { ...original, evidence: [workflowEvidence] };
+  const input = {
+    scan: { chapters: [], citations: [], bibliography: {}, scannedAt: "2026-07-14T10:01:00.000Z" },
+    mapping: { entries: {} },
+    sources: [{ sourceId: "group:1:SCANNED", title: "Scanned selection", selected: true }]
+  };
+
+  assert.throws(() => updateProjectScan(state, input), /REVISION_REQUIRED/);
+  const updated = updateProjectScan(state, input, { expectedRevision: state.revision, now: "2026-07-14T10:02:00.000Z" });
+
+  assert.equal(updated.revision, state.revision + 1);
+  assert.deepEqual(updated.evidence.map(({ sourceId }) => sourceId), ["group:1:WORKFLOW", "group:1:SCANNED"]);
+  assert.deepEqual(updated.evidence[0], workflowEvidence);
 });
 
 test("renders selected evidence deterministically and preserves researcher sections", async () => {
@@ -135,8 +163,35 @@ test("claim proposals require consent and cannot self-approve", async () => {
   assert.throws(() => recordClaimProposals(state, [{ id: "claim-1", text: "Claim", locationId: "tex:main.tex:paragraph-1", chapterId: "chapter-introduction", sourceIds: [], status: "approved" }], {
     provider: "codex",
     approvedExternalProcessing: false,
+    expectedRevision: state.revision,
     knownSourceIds: []
   }), /Explicit approval/);
+});
+
+test("claim proposal and review mutations require the current revision", async () => {
+  const { thesisDir, vaultPath } = await fixtureProject();
+  const state = createProjectState({ project: "Test thesis", thesisDir, vaultPath });
+  const proposal = [{
+    id: "claim-1",
+    text: "Claim",
+    locationId: "tex:main.tex:paragraph-1",
+    chapterId: "chapter-introduction",
+    sourceIds: ["group:1:ABC"]
+  }];
+  const options = {
+    provider: "codex",
+    approvedExternalProcessing: true,
+    knownSourceIds: ["group:1:ABC"]
+  };
+
+  assert.throws(() => recordClaimProposals(state, proposal, options), /REVISION_REQUIRED/);
+  const proposed = recordClaimProposals(state, proposal, { ...options, expectedRevision: state.revision });
+  assert.equal(proposed.revision, state.revision + 1);
+  assert.throws(() => approveClaimProposal(proposed, "claim-1", "approved", { expectedRevision: state.revision }), /STATE_STALE/);
+
+  const approved = approveClaimProposal(proposed, "claim-1", "approved", { expectedRevision: proposed.revision });
+  assert.equal(approved.revision, proposed.revision + 1);
+  assert.equal(approved.claims[0].status, "approved");
 });
 
 test("Codex proposes bounded claim links but cannot approve them", async () => {

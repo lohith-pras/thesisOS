@@ -12,7 +12,7 @@ function notFound(message) {
  * HTTP handlers and UI adapters should use this module rather than composing
  * state mutation, persistence, and read-model projection independently.
  */
-export function createRevisionWorkflow({ loadState, persistState, previewNote }) {
+export function createRevisionWorkflow({ loadState, persistState, previewNote, serialize = (operation) => operation() }) {
   const projectView = (state, feedbackThreadId = null) => {
     const thread = feedbackThreadId ? state.feedbackThreads.find(({ id }) => id === feedbackThreadId) : state.feedbackThreads.at(-1);
     if (!thread) return null;
@@ -21,6 +21,12 @@ export function createRevisionWorkflow({ loadState, persistState, previewNote })
     return { ...workflow, preview };
   };
   const response = (state, feedbackThreadId) => ({ state, readiness: profileReadiness(state), workflow: projectView(state, feedbackThreadId) });
+  const mutate = (transition) => serialize(async () => {
+    const current = await loadState();
+    const result = await transition(current);
+    if (result.state !== current) await persistState(result.state, { expectedRevision: current.revision });
+    return result;
+  });
 
   return {
     async read(feedbackThreadId = null) {
@@ -30,38 +36,43 @@ export function createRevisionWorkflow({ loadState, persistState, previewNote })
       return { ...response(state, workflow.feedbackThreadId), workflow };
     },
     async capture(input) {
-      const current = await loadState();
-      const match = findFeedbackMatch(current, input);
-      if (match?.kind === "exact") return { state: current, readiness: profileReadiness(current), feedbackThread: match.thread, deduplication: "already_saved" };
-      const state = recordFeedback(current, match ? { ...input, mergeIntoFeedbackThreadId: match.thread.id } : input);
-      await persistState(state);
-      const feedbackThread = match ? state.feedbackThreads.find(({ id }) => id === match.thread.id) : state.feedbackThreads.at(-1);
-      return { state, readiness: profileReadiness(state), feedbackThread, deduplication: match ? "follow_up_merged" : "new" };
+      return mutate((current) => {
+        const match = findFeedbackMatch(current, input);
+        if (match?.kind === "exact") return { state: current, readiness: profileReadiness(current), feedbackThread: match.thread, deduplication: "already_saved" };
+        const state = recordFeedback(current, match ? { ...input, mergeIntoFeedbackThreadId: match.thread.id } : input);
+        const feedbackThread = match ? state.feedbackThreads.find(({ id }) => id === match.thread.id) : state.feedbackThreads.at(-1);
+        return { state, readiness: profileReadiness(state), feedbackThread, deduplication: match ? "follow_up_merged" : "new" };
+      });
     },
     async confirmPlacement(input) {
-      const state = confirmFeedbackPlacement(await loadState(), input);
-      await persistState(state);
-      return response(state, input.feedbackThreadId);
+      return mutate((current) => {
+        const state = confirmFeedbackPlacement(current, input);
+        return response(state, input.feedbackThreadId);
+      });
     },
     async persistTaskGraph(input) {
-      const state = recordFeedbackTasks(await loadState(), input, { expectedRevision: input.expectedRevision });
-      await persistState(state);
-      return response(state, input.feedbackThreadId);
+      return mutate((current) => {
+        const state = recordFeedbackTasks(current, input, { expectedRevision: input.expectedRevision });
+        return response(state, input.feedbackThreadId);
+      });
     },
     async reviewTask(input) {
-      const state = reviewCanonicalTask(await loadState(), input);
-      await persistState(state);
-      return response(state, input.feedbackThreadId);
+      return mutate((current) => {
+        const state = reviewCanonicalTask(current, input);
+        return response(state, input.feedbackThreadId);
+      });
     },
     async attachEvidence(input) {
-      const state = attachCanonicalEvidence(await loadState(), input, { searchArtifact: input.searchArtifact });
-      await persistState(state);
-      return response(state, input.feedbackThreadId);
+      return mutate((current) => {
+        const state = attachCanonicalEvidence(current, input, { searchArtifact: input.searchArtifact });
+        return response(state, input.feedbackThreadId);
+      });
     },
     async recordDraft(input, options) {
-      const state = recordCanonicalDraft(await loadState(), input, options);
-      await persistState(state);
-      return response(state, input.feedbackThreadId);
+      return mutate((current) => {
+        const state = recordCanonicalDraft(current, input, options);
+        return response(state, input.feedbackThreadId);
+      });
     }
   };
 }

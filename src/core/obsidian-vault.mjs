@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
 const STARTER_FOLDERS = [
   "00_Inbox",
@@ -76,9 +77,27 @@ export async function saveObsidianVault(projectDir, vaultPath) {
   const path = resolve(projectDir, ".thesisos.json");
   const config = await readProjectConfig(projectDir);
   config.obsidian = { ...(config.obsidian ?? {}), vaultPath };
-  const temporaryPath = `${path}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(config, null, 2)}\n`);
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
   await rename(temporaryPath, path);
+  return vaultPath;
+}
+
+export function validateVaultName(value) {
+  const name = typeof value === "string" && value.trim() ? value.trim() : "Proofline";
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._ -]{0,100}$/.test(name) || name === "." || name === "..") {
+    throw new Error("Use a short vault name containing letters, numbers, spaces, dots, dashes, or underscores.");
+  }
+  return name;
+}
+
+function vaultPathInside(parentPath, name) {
+  const parent = resolve(parentPath);
+  const vaultPath = resolve(parent, name);
+  const child = relative(parent, vaultPath);
+  if (!child || child === ".." || child.startsWith(`..${sep}`) || isAbsolute(child)) {
+    throw new Error("The vault name must create a folder inside the selected parent folder.");
+  }
   return vaultPath;
 }
 
@@ -91,17 +110,17 @@ export async function scaffoldObsidianVault(vaultPath, name = "Proofline") {
   return root;
 }
 
-export async function chooseObsidianVault(projectDir, { mode = "existing", name } = {}) {
+export async function chooseObsidianVault(projectDir, { mode = "existing", name, persist = true } = {}) {
   const selected = await pickFolder(mode);
   let vaultPath = selected;
   if (mode === "create") {
-    const vaultName = typeof name === "string" && name.trim() ? name.trim() : "Proofline";
-    vaultPath = resolve(selected, vaultName);
+    const vaultName = validateVaultName(name);
+    vaultPath = vaultPathInside(selected, vaultName);
     await scaffoldObsidianVault(vaultPath, vaultName);
   }
   const status = await inspectObsidianVault(vaultPath);
   if (!status.exists) throw new Error("The selected folder does not exist.");
   if (mode === "existing" && !status.isVault) throw new Error("The selected folder does not contain an Obsidian configuration or Markdown file. Choose a folder with notes or create a new vault.");
-  await saveObsidianVault(projectDir, vaultPath);
+  if (persist) await saveObsidianVault(projectDir, vaultPath);
   return status;
 }

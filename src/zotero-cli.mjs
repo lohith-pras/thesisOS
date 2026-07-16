@@ -1,7 +1,9 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import { listZoteroPapers, searchZotero } from "./core/zotero.mjs";
+import { loadProjectState, saveProjectState, updateZoteroLibrary } from "./core/project-state.mjs";
 
 export function parseZoteroArgs(args) {
   const options = {
@@ -26,7 +28,7 @@ export function parseZoteroArgs(args) {
       options.allLibraries = true;
       continue;
     }
-    if (!["--input-dir", "--output", "--query", "--limit", "--user-id", "--library-type", "--library-id", "--library"].includes(arg)) {
+    if (!["--input-dir", "--output", "--query", "--limit", "--user-id", "--library-type", "--library-id", "--library", "--expected-revision"].includes(arg)) {
       throw new Error(`Unknown argument '${arg}'. Use --help for usage.`);
     }
     const value = args[index + 1];
@@ -40,6 +42,11 @@ export function parseZoteroArgs(args) {
     if (arg === "--library-type") options.libraryType = value;
     if (arg === "--library-id") options.libraryId = value;
     if (arg === "--library") options.library = value;
+    if (arg === "--expected-revision") {
+      const expectedRevision = Number(value);
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error("--expected-revision must be a positive integer.");
+      options.expectedRevision = expectedRevision;
+    }
   }
   if (options.allLibraries && (options.library || options.libraryType || options.libraryId)) {
     throw new Error("--all-libraries cannot be combined with --library, --library-type, or --library-id.");
@@ -48,12 +55,22 @@ export function parseZoteroArgs(args) {
 }
 
 async function writeJsonSafely(path, value) {
-  const temporaryPath = `${path}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`);
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
   await rename(temporaryPath, path);
 }
 
+async function loadCanonicalProjectState(projectDir) {
+  try { return await loadProjectState(resolve(projectDir, ".thesisos", "thesis-state.json")); }
+  catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 export async function loadZoteroSelection(projectDir = process.cwd()) {
+  const canonical = await loadCanonicalProjectState(projectDir);
+  if (canonical) return canonical.project.zoteroLibrary ?? null;
   try {
     const config = JSON.parse(await readFile(resolve(projectDir, ".thesisos.json"), "utf8"));
     return config.zotero?.library ?? null;
@@ -64,7 +81,13 @@ export async function loadZoteroSelection(projectDir = process.cwd()) {
   }
 }
 
-export async function saveZoteroSelection(projectDir = process.cwd(), library) {
+export async function saveZoteroSelection(projectDir = process.cwd(), library, options = {}) {
+  const canonical = await loadCanonicalProjectState(projectDir);
+  if (canonical) {
+    const nextState = updateZoteroLibrary(canonical, library, { expectedRevision: options.expectedRevision });
+    await saveProjectState(resolve(projectDir, ".thesisos", "thesis-state.json"), nextState, { expectedRevision: options.expectedRevision });
+    return nextState.project.zoteroLibrary;
+  }
   const path = resolve(projectDir, ".thesisos.json");
   let config = {};
   try {
@@ -78,6 +101,7 @@ export async function saveZoteroSelection(projectDir = process.cwd(), library) {
     ...(library.name ? { name: library.name } : {})
   } };
   await writeJsonSafely(path, config);
+  return config.zotero.library;
 }
 
 export function formatLibrarySummary(artifact) {
@@ -88,7 +112,7 @@ export function formatLibrarySummary(artifact) {
 export async function main(args = process.argv.slice(2)) {
   const options = parseZoteroArgs(args);
   if (options.help) {
-    console.log(`Usage: npm run zotero -- [options]\n\nOptions:\n  --list               List top-level bibliographic papers; no approval needed\n  --input-dir <path>   Directory containing an approved task-graph.json\n  --query <text>       Override the query inferred from supervisor feedback\n  --limit <1-100>      Maximum candidates to return; default 10\n  --output <name>      Output artifact filename\n  --library <name|id> Select one discovered library and remember it for this project\n  --all-libraries      Intentionally extract from every non-empty library\n  --library-type <t>  user or group (script-compatible explicit selection)\n  --library-id <id>    User or group library ID\n  --web                Use Zotero Web API instead of the local desktop API\n  --user-id <id>       Override ZOTERO_USER_ID for web mode\n  -h, --help           Show this help`);
+    console.log(`Usage: npm run zotero -- [options]\n\nOptions:\n  --list               List top-level bibliographic papers; no approval needed\n  --input-dir <path>   Directory containing an approved task-graph.json\n  --query <text>       Override the query inferred from supervisor feedback\n  --limit <1-100>      Maximum candidates to return; default 10\n  --output <name>      Output artifact filename\n  --library <name|id> Select one discovered library and remember it for this project\n  --expected-revision <n> Required when remembering a library in a canonical workspace\n  --all-libraries      Intentionally extract from every non-empty library\n  --library-type <t>  user or group (script-compatible explicit selection)\n  --library-id <id>    User or group library ID\n  --web                Use Zotero Web API instead of the local desktop API\n  --user-id <id>       Override ZOTERO_USER_ID for web mode\n  -h, --help           Show this help`);
     return;
   }
 
@@ -105,7 +129,7 @@ export async function main(args = process.argv.slice(2)) {
     const taskGraph = JSON.parse(await readFile(graphPath, "utf8"));
     artifact = await searchZotero(taskGraph, options);
   }
-  if (artifact.library && !options.allLibraries) await saveZoteroSelection(projectDir, artifact.library);
+  if (artifact.library && !options.allLibraries) await saveZoteroSelection(projectDir, artifact.library, { expectedRevision: options.expectedRevision });
   const outputName = options.output ?? (options.list ? "zotero-library.json" : "zotero-candidates.json");
   const outputPath = resolve(options.inputDir, outputName);
   await writeJsonSafely(outputPath, artifact);

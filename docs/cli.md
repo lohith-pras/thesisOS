@@ -18,12 +18,14 @@ npm run workspace -- init \
 This writes canonical state to `.thesisos/thesis-state.json`, scans `.tex` and `.bib` read-only, and maps bibliography citekeys to Zotero source IDs by DOI and then exact normalized title. Ambiguous and unresolved keys remain visible.
 
 ```bash
-npm run workspace -- scan --project-dir . --sources-file ./selected-zotero-sources.json
-npm run workspace -- propose --project-dir . --approve-external-processing
-npm run workspace -- review --project-dir . --approve claim-001
-npm run workspace -- render --project-dir . --approve-write
 npm run workspace -- status --project-dir .
+npm run workspace -- scan --project-dir . --expected-revision <current-revision> --sources-file ./selected-zotero-sources.json
+npm run workspace -- propose --project-dir . --expected-revision <current-revision> --approve-external-processing
+npm run workspace -- review --project-dir . --expected-revision <current-revision> --approve claim-001
+npm run workspace -- render --project-dir . --approve-write
 ```
+
+`status` prints the current canonical `revision`. Every existing-state mutation (`scan`, `propose`, and `review`) requires that value through `--expected-revision`; rerun `status` after each successful mutation. `init` creates a new state only and refuses to overwrite an existing one.
 
 `propose` sends only bounded citation contexts and selected evidence to the authenticated Codex CLI. All returned links enter state as `proposed`; only `review` can approve or reject them. `render` deterministically writes managed dashboard, chapter, selected-literature, feedback, and claim-ledger views while preserving marked researcher sections.
 
@@ -74,7 +76,7 @@ Approvals are stored separately from execution status as `approvalStatus: pendin
 ## Zotero CLI
 
 ```bash
-npm run zotero -- --list --input-dir ./demo-output/run
+npm run zotero -- --list --input-dir ./demo-output/run --expected-revision <current-revision>
 npm run zotero -- --input-dir ./demo-output/run --query "distributed sensing"
 npm run zotero -- --input-dir ./demo-output/run --all-libraries
 ```

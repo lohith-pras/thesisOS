@@ -17,17 +17,17 @@ Proofline automatically selects a library when exactly one non-empty library is 
 Select one library from the CLI:
 
 ```bash
-npm run zotero -- --list --library isac_project_thesis
-npm run zotero -- --list --library 6568124
+npm run zotero -- --list --library isac_project_thesis --expected-revision <current-revision>
+npm run zotero -- --list --library 6568124 --expected-revision <current-revision>
 ```
 
 Use explicit group selection for scripts:
 
 ```bash
-npm run zotero -- --list --library-type group --library-id 6568124
+npm run zotero -- --list --library-type group --library-id 6568124 --expected-revision <current-revision>
 ```
 
-The selected library is persisted in the legacy-compatible project file `.thesisos.json` and reused on later runs.
+For an initialized workspace, the selected library type, ID, and display name are saved in `.thesisos/thesis-state.json` as a revisioned `zotero.library.selected` event. The app requires the current project revision for this change. The standalone CLI retains `.thesisos.json` only as a compatibility fallback before a canonical workspace exists.
 
 ## Multiple libraries
 

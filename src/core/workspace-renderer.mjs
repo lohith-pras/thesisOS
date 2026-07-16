@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, resolve, sep } from "node:path";
+import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { profileReadiness } from "./project-state.mjs";
 
@@ -84,24 +84,88 @@ function researcherContent(existing) {
   return existing.slice(existing.indexOf(START) + START.length, existing.indexOf(END));
 }
 
-export async function writeWorkspace(vaultPath, views, options = {}) {
-  if (options.approved !== true) throw new Error("Explicit write approval is required before rendering the workspace.");
-  const workspaceRoot = resolve(vaultPath, "ThesisOS");
-  for (const [relativePath, proposed] of Object.entries(views)) {
-    const path = resolve(workspaceRoot, relativePath);
-    if (path !== workspaceRoot && !path.startsWith(`${workspaceRoot}${sep}`)) throw new Error(`Rendered path escapes workspace: ${relativePath}`);
-    let content = proposed;
-    try {
-      const existing = await readFile(path, "utf8");
-      if (!existing.includes("managed_by: thesisos")) throw new Error(`Refusing to overwrite unmanaged file '${path}'.`);
-      content = proposed.replace(`${START}\n${END}`, `${START}${researcherContent(existing)}${END}`);
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-    }
-    await mkdir(dirname(path), { recursive: true });
-    const temporary = `${path}.${randomUUID()}.tmp`;
+function workspaceFilePath(workspaceRoot, relativePath) {
+  if (typeof relativePath !== "string" || !relativePath || relativePath.includes("\0")) {
+    throw new Error("Rendered path must name a file inside the managed workspace.");
+  }
+  if (isAbsolute(relativePath)) throw new Error(`Rendered path escapes workspace: ${relativePath}`);
+  const path = resolve(workspaceRoot, relativePath);
+  const withinWorkspace = relative(workspaceRoot, path);
+  if (!withinWorkspace || withinWorkspace === ".." || withinWorkspace.startsWith(`..${sep}`) || isAbsolute(withinWorkspace)) {
+    throw new Error(`Rendered path escapes workspace: ${relativePath}`);
+  }
+  return path;
+}
+
+async function assertSafeDirectory(path, label) {
+  const entry = await lstat(path);
+  if (entry.isSymbolicLink()) throw new Error(`${label} cannot be a symbolic link.`);
+  if (!entry.isDirectory()) throw new Error(`${label} must be a directory.`);
+}
+
+async function createSafeDirectory(path, label) {
+  try {
+    await mkdir(path);
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+  }
+  await assertSafeDirectory(path, label);
+}
+
+async function ensureSafeWorkspaceParent(workspaceRoot, path) {
+  await mkdir(workspaceRoot, { recursive: true });
+  await assertSafeDirectory(workspaceRoot, "The managed workspace root");
+
+  const parent = dirname(path);
+  const nested = relative(workspaceRoot, parent);
+  let current = workspaceRoot;
+  for (const segment of nested.split(sep)) {
+    if (!segment || segment === ".") continue;
+    current = resolve(current, segment);
+    await createSafeDirectory(current, "A managed workspace directory");
+  }
+}
+
+async function managedContent(path, proposed) {
+  let entry;
+  try {
+    entry = await lstat(path);
+  } catch (error) {
+    if (error.code === "ENOENT") return proposed;
+    throw error;
+  }
+  if (entry.isSymbolicLink()) throw new Error("A managed workspace file cannot be a symbolic link.");
+  if (!entry.isFile()) throw new Error(`Refusing to overwrite non-file workspace entry '${path}'.`);
+  const existing = await readFile(path, "utf8");
+  if (!existing.includes("managed_by: thesisos")) throw new Error(`Refusing to overwrite unmanaged file '${path}'.`);
+  return proposed.replace(`${START}\n${END}`, `${START}${researcherContent(existing)}${END}`);
+}
+
+async function writeAtomically(path, content) {
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  try {
     await writeFile(temporary, content, { encoding: "utf8", flag: "wx" });
     await rename(temporary, path);
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+export async function writeWorkspace(vaultPath, views, options = {}) {
+  if (options.approved !== true) throw new Error("Explicit write approval is required before rendering the workspace.");
+  if (typeof vaultPath !== "string" || !vaultPath.trim() || !isAbsolute(vaultPath)) {
+    throw new Error("Workspace vault path must be absolute.");
+  }
+  const workspaceRoot = resolve(vaultPath, "ThesisOS");
+  const files = Object.entries(views).map(([relativePath, proposed]) => ({
+    path: workspaceFilePath(workspaceRoot, relativePath),
+    proposed
+  }));
+  for (const { path, proposed } of files) {
+    await ensureSafeWorkspaceParent(workspaceRoot, path);
+    const content = await managedContent(path, proposed);
+    await writeAtomically(path, content);
   }
   return { written: Object.keys(views).length, root: workspaceRoot };
 }

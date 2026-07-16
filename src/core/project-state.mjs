@@ -1,8 +1,11 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, mkdir, open, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 
 const CLAIM_STATUSES = new Set(["proposed", "approved", "rejected"]);
+const ZOTERO_LIBRARY_TYPES = new Set(["user", "group"]);
+const STATE_LOCK_TIMEOUT_MS = 5_000;
+const STALE_STATE_LOCK_MS = 30_000;
 const PROFILE_STAGES = new Set([
   "literature-review",
   "introduction",
@@ -33,6 +36,125 @@ const STAGE_SIGNALS = [
 function requireText(value, label) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required.`);
   return value.trim();
+}
+
+function normalizeZoteroLibrary(library) {
+  if (!library || typeof library !== "object") throw new Error("Zotero library details are required.");
+  const type = requireText(library.type, "Zotero library type");
+  if (!ZOTERO_LIBRARY_TYPES.has(type)) throw new Error("Zotero library type must be 'user' or 'group'.");
+  if (!new Set(["string", "number"]).has(typeof library.id) || !String(library.id).trim()) {
+    throw new Error("Zotero library ID is required.");
+  }
+  const id = String(library.id).trim();
+  const name = typeof library.name === "string" && library.name.trim() ? library.name.trim() : null;
+  return { type, id, ...(name ? { name } : {}) };
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
+}
+
+function staleStateError(expectedRevision, currentRevision) {
+  const error = new Error(`STATE_STALE: expected revision ${expectedRevision}, current revision is ${currentRevision}.`);
+  error.code = "STATE_STALE";
+  return error;
+}
+
+function stateLockLostError() {
+  const error = new Error("STATE_STALE: canonical state changed while this write was waiting for its lock.");
+  error.code = "STATE_STALE";
+  return error;
+}
+
+async function readStateLock(lockPath) {
+  try {
+    const lock = JSON.parse(await readFile(lockPath, "utf8"));
+    return typeof lock?.token === "string" ? lock : null;
+  } catch (error) {
+    if (error.code === "ENOENT") throw error;
+    return null;
+  }
+}
+
+function processIsAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid < 1) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
+
+async function releaseStateWriteLock(lockPath, token) {
+  let owner;
+  try { owner = await readStateLock(lockPath); }
+  catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  if (owner?.token === token) await rm(lockPath, { force: true });
+}
+
+async function assertStateWriteLockOwner(lockPath, token) {
+  let owner;
+  try { owner = await readStateLock(lockPath); }
+  catch (error) {
+    if (error.code === "ENOENT") throw stateLockLostError();
+    throw error;
+  }
+  if (owner?.token !== token) throw stateLockLostError();
+}
+
+async function acquireStateWriteLock(path) {
+  const lockPath = `${path}.lock`;
+  const deadline = Date.now() + STATE_LOCK_TIMEOUT_MS;
+  while (true) {
+    try {
+      const handle = await open(lockPath, "wx", 0o600);
+      const token = randomUUID();
+      try {
+        await handle.writeFile(JSON.stringify({ token, pid: process.pid }));
+      } catch (error) {
+        await handle.close();
+        await rm(lockPath, { force: true });
+        throw error;
+      }
+      const heartbeat = setInterval(() => {
+        void utimes(lockPath, new Date(), new Date()).catch(() => {});
+      }, Math.max(1_000, Math.floor(STALE_STATE_LOCK_MS / 3)));
+      heartbeat.unref?.();
+      return { lockPath, handle, token, heartbeat };
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      try {
+        const lock = await stat(lockPath);
+        if (Date.now() - lock.mtimeMs > STALE_STATE_LOCK_MS) {
+          const owner = await readStateLock(lockPath);
+          if (owner?.pid && processIsAlive(owner.pid)) {
+            // A live local writer may be temporarily slow; prefer a retryable timeout to unsafe lock theft.
+          } else {
+            const retiredPath = `${lockPath}.${randomUUID()}.stale`;
+            try {
+              await rename(lockPath, retiredPath);
+              await rm(retiredPath, { force: true });
+            } catch (retireError) {
+              if (retireError.code !== "ENOENT") throw retireError;
+            }
+            continue;
+          }
+        }
+      } catch (lockError) {
+        if (lockError.code !== "ENOENT") throw lockError;
+      }
+      if (Date.now() >= deadline) {
+        const timeout = new Error("The canonical state is busy. Retry after the current write finishes.");
+        timeout.code = "STATE_LOCK_TIMEOUT";
+        throw timeout;
+      }
+      await sleep(20);
+    }
+  }
 }
 
 function event(type, now, details = {}) {
@@ -99,6 +221,7 @@ export function consolidateFeedbackThreads(state, options = {}) {
     remappedThreadIds.set(thread.id, primary.id);
   }
   if (!remappedThreadIds.size) return state;
+  expectRevision(state, options.expectedRevision);
   const now = options.now ?? new Date().toISOString();
   return validateProjectState({
     ...state,
@@ -135,6 +258,7 @@ export function validateProjectState(state) {
   if (state.project?.thesisDir !== null) requireText(state.project?.thesisDir, "Thesis directory");
   if (state.project?.vaultPath !== null) requireText(state.project?.vaultPath, "Vault path");
   if (state.project?.overleafUrl !== null && state.project?.overleafUrl !== undefined) requireText(state.project?.overleafUrl, "Overleaf URL");
+  if (state.project?.zoteroLibrary !== null && state.project?.zoteroLibrary !== undefined) normalizeZoteroLibrary(state.project.zoteroLibrary);
   if (!Array.isArray(state.claims) || !Array.isArray(state.events)) throw new Error("Project claims and events must be arrays.");
   if (!state.profile || typeof state.profile !== "object") throw new Error("Project profile must be an object.");
   if (!Array.isArray(state.documents)) throw new Error("Project documents must be an array.");
@@ -159,7 +283,7 @@ export function validateProjectState(state) {
   return state;
 }
 
-export function createProjectState({ project, thesisDir, vaultPath, overleafUrl }, options = {}) {
+export function createProjectState({ project, thesisDir, vaultPath, overleafUrl, zoteroLibrary }, options = {}) {
   const now = options.now ?? new Date().toISOString();
   return validateProjectState({
     schemaVersion: 3,
@@ -168,7 +292,8 @@ export function createProjectState({ project, thesisDir, vaultPath, overleafUrl 
       name: requireText(project, "Project name"),
       thesisDir: thesisDir ? requireText(thesisDir, "Thesis directory") : null,
       vaultPath: vaultPath ? requireText(vaultPath, "Vault path") : null,
-      overleafUrl: overleafUrl ? requireText(overleafUrl, "Overleaf URL") : null
+      overleafUrl: overleafUrl ? requireText(overleafUrl, "Overleaf URL") : null,
+      zoteroLibrary: zoteroLibrary ? normalizeZoteroLibrary(zoteroLibrary) : null
     },
     feedbackThreads: [],
     profile: { objectives: [], problems: [], deliverables: [], deadlines: [], supervisorExpectations: [], seedReferences: [] },
@@ -184,14 +309,14 @@ export function createProjectState({ project, thesisDir, vaultPath, overleafUrl 
 }
 
 export function migrateProjectState(state, options = {}) {
-  if (state?.schemaVersion === 3) return validateProjectState({ ...state, evidence: state.evidence ?? [], project: { ...state.project, overleafUrl: state.project?.overleafUrl ?? null } });
+  if (state?.schemaVersion === 3) return validateProjectState({ ...state, evidence: state.evidence ?? [], project: { ...state.project, overleafUrl: state.project?.overleafUrl ?? null, zoteroLibrary: state.project?.zoteroLibrary ?? null } });
   if (state?.schemaVersion !== 2) throw new Error(`Unsupported project state schema version '${state?.schemaVersion}'.`);
   const now = options.now ?? new Date().toISOString();
   return validateProjectState({
     ...state,
     schemaVersion: 3,
     revision: 1,
-    project: { ...state.project, overleafUrl: state.project?.overleafUrl ?? null },
+    project: { ...state.project, overleafUrl: state.project?.overleafUrl ?? null, zoteroLibrary: state.project?.zoteroLibrary ?? null },
     profile: { objectives: [], problems: [], deliverables: [], deadlines: [], supervisorExpectations: [], seedReferences: [] },
     profileProposal: null,
     documents: [],
@@ -204,13 +329,45 @@ export async function loadProjectState(path) {
   return migrateProjectState(JSON.parse(await readFile(path, "utf8")));
 }
 
-export async function saveProjectState(path, state) {
+export async function saveProjectState(path, state, options = {}) {
   validateProjectState(state);
-  await mkdir(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
-  await rename(temporaryPath, path);
-  return state;
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  await chmod(dirname(path), 0o700);
+  const expectedRevision = options.expectedRevision;
+  const expectAbsent = options.expectAbsent === true;
+  if (expectedRevision === undefined || expectedRevision === null) {
+    const error = new Error("REVISION_REQUIRED: include expectedRevision before saving canonical state.");
+    error.code = "REVISION_REQUIRED";
+    throw error;
+  }
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new Error("expectedRevision must be a non-negative integer when saving canonical state.");
+  }
+  const { lockPath, handle, token, heartbeat } = await acquireStateWriteLock(path);
+  let temporaryPath;
+  try {
+    try {
+      const current = JSON.parse(await readFile(path, "utf8"));
+      if (expectAbsent) throw staleStateError(0, current.revision);
+      if (current.revision !== expectedRevision) throw staleStateError(expectedRevision, current.revision);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+    await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await assertStateWriteLockOwner(lockPath, token);
+    await rename(temporaryPath, path);
+    temporaryPath = null;
+    return state;
+  } finally {
+    clearInterval(heartbeat);
+    if (temporaryPath) await rm(temporaryPath, { force: true });
+    try {
+      await handle.close();
+    } finally {
+      await releaseStateWriteLock(lockPath, token);
+    }
+  }
 }
 
 function expectRevision(state, expectedRevision) {
@@ -362,6 +519,19 @@ export function updateProjectPaths(state, input, options = {}) {
   });
 }
 
+export function updateZoteroLibrary(state, library, options = {}) {
+  validateProjectState(state);
+  expectRevision(state, options.expectedRevision);
+  const zoteroLibrary = normalizeZoteroLibrary(library);
+  const now = options.now ?? new Date().toISOString();
+  return validateProjectState({
+    ...state,
+    revision: state.revision + 1,
+    project: { ...state.project, zoteroLibrary },
+    events: [...state.events, event("zotero.library.selected", now, { libraryType: zoteroLibrary.type, libraryId: zoteroLibrary.id })]
+  });
+}
+
 export function renameProject(state, input, options = {}) {
   validateProjectState(state);
   expectRevision(state, input.expectedRevision);
@@ -488,13 +658,15 @@ export function recordFeedbackTasks(state, { feedback, title, taskGraph, context
   if (existing?.tasks?.length) throw new Error("This feedback already has proposed tasks.");
   const id = existing?.id ?? `feedback-${randomUUID()}`;
   const thread = {
+    ...(existing ?? {}),
     id,
     title: (existing?.title ?? title?.trim()) || "Supervisor feedback",
     feedback: existing?.feedback ?? requireText(feedback, "Supervisor feedback"),
     status: "in_progress",
     tasks: taskGraph.tasks,
     context,
-    createdAt: existing?.createdAt ?? now
+    createdAt: existing?.createdAt ?? now,
+    ...(existing ? { updatedAt: now } : {})
   };
   return validateProjectState({
     ...state,
@@ -526,6 +698,7 @@ export function reviewCanonicalTask(state, review, options = {}) {
 
 export function recordClaimProposals(state, proposals, options = {}) {
   validateProjectState(state);
+  expectRevision(state, options.expectedRevision);
   if (options.approvedExternalProcessing !== true) throw new Error("Explicit approval is required before processing thesis excerpts externally.");
   if (!Array.isArray(proposals) || proposals.length === 0) throw new Error("At least one claim proposal is required.");
   const knownSources = new Set(options.knownSourceIds ?? []);
@@ -555,6 +728,7 @@ export function recordClaimProposals(state, proposals, options = {}) {
   });
   return validateProjectState({
     ...state,
+    revision: state.revision + 1,
     claims: [...state.claims, ...additions],
     events: [...state.events, event("claims.proposed", now, { claimIds: additions.map(({ id }) => id) })]
   });
@@ -562,6 +736,7 @@ export function recordClaimProposals(state, proposals, options = {}) {
 
 export function approveClaimProposal(state, claimId, decision, options = {}) {
   validateProjectState(state);
+  expectRevision(state, options.expectedRevision);
   if (!new Set(["approved", "rejected"]).has(decision)) throw new Error("Claim decision must be approved or rejected.");
   const claim = state.claims.find((item) => item.id === claimId);
   if (!claim) throw new Error(`Unknown claim ID '${claimId}'.`);
@@ -569,6 +744,7 @@ export function approveClaimProposal(state, claimId, decision, options = {}) {
   const now = options.now ?? new Date().toISOString();
   return validateProjectState({
     ...state,
+    revision: state.revision + 1,
     claims: state.claims.map((item) => item.id === claimId ? { ...item, status: decision, reviewedAt: now } : item),
     events: [...state.events, event("claim.reviewed", now, {
       claimId,
@@ -581,11 +757,23 @@ export function approveClaimProposal(state, claimId, decision, options = {}) {
 
 export function updateProjectScan(state, { scan, mapping, sources }, options = {}) {
   validateProjectState(state);
+  expectRevision(state, options.expectedRevision);
   const citedKeys = new Set(scan.citations.flatMap(({ citekeys }) => citekeys));
   const unresolvedCitekeys = [...citedKeys].filter((citekey) => mapping.entries[citekey]?.status !== "mapped").sort();
   const now = options.now ?? new Date().toISOString();
+  const nextSources = sources ?? state.sources ?? [];
+  const workflowEvidence = state.evidence.filter((record) => record.feedbackThreadId !== undefined || record.taskId !== undefined);
+  const evidenceSourceIds = new Set(workflowEvidence.map(({ sourceId }) => sourceId));
+  const evidence = [...workflowEvidence];
+  for (const source of nextSources) {
+    if (source.selected === true && !evidenceSourceIds.has(source.sourceId)) {
+      evidence.push(source);
+      evidenceSourceIds.add(source.sourceId);
+    }
+  }
   return validateProjectState({
     ...state,
+    revision: state.revision + 1,
     manuscript: {
       chapters: scan.chapters,
       citations: scan.citations,
@@ -594,8 +782,8 @@ export function updateProjectScan(state, { scan, mapping, sources }, options = {
       unresolvedCitekeys,
       scannedAt: scan.scannedAt
     },
-    sources: sources ?? [],
-    evidence: (sources ?? []).filter((source) => source.selected === true),
+    sources: nextSources,
+    evidence,
     events: [...state.events, event("manuscript.scanned", now, {
       chapterCount: scan.chapters.length,
       citationCount: scan.citations.length,

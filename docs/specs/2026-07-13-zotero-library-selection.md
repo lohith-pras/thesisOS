@@ -16,7 +16,7 @@ Selection follows these rules:
 4. If multiple libraries contain papers, ThesisOS returns a catalog containing library name, type, ID, and paper count and requires the user to choose one.
 5. If no library contains papers, ThesisOS reports the discovered empty libraries and does not claim a successful extraction.
 
-The selected library is saved in project-local configuration so later commands are non-interactive and reproducible. A stale or inaccessible saved selection is rejected with the current library catalog instead of silently falling back to another library.
+The selected library is saved in canonical project state with a revisioned event so later commands are non-interactive and reproducible. A stale or inaccessible saved selection is rejected with the current library catalog instead of silently falling back to another library.
 
 ## User controls
 
@@ -44,7 +44,7 @@ Errors include a stable code, actionable message, and relevant library context. 
 
 ## Configuration
 
-The project-local configuration stores the selected library type and ID. The display name is informational and can be refreshed if the Zotero group is renamed. Environment variables remain available for unattended workflows and take precedence over project configuration only when explicitly set.
+Canonical project state stores the selected library type and ID. The display name is informational and can be refreshed if the Zotero group is renamed. Environment variables remain available for unattended workflows and take precedence over project configuration only when explicitly set.
 
 ## Verification
 

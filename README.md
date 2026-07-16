@@ -1,8 +1,6 @@
 # Proofline
 
-Research feedback says, “Section 3.2 needs stronger evidence.” Proofline turns that comment into reviewed papers from your Zotero library and a grounded research note whose citations must match sources you selected.
-
-If a generated draft cites a source ID you did not select, Proofline rejects it.
+A supervisor says, “Strengthen this claim.” The real work is figuring out which papers support the revision and keeping the evidence trail intact. Proofline turns that comment into an approved research task, searches your own Zotero library, lets you select what counts as evidence, and creates a grounded note preview that cannot cite sources you did not choose.
 
 ![Proofline judge-mode proof: grounded note, Claim Traceback, and citation rejection](docs/assets/thesisos-hero.gif)
 
@@ -92,6 +90,7 @@ Build-time GPT-5.6 usage and runtime model selection are separate. The detailed 
 - **Evidence boundary:** drafting receives only reviewed evidence, and drafts containing unselected source IDs are rejected.
 - **Write boundary:** notes are previewed before a separate filesystem approval; judge mode cannot write at all.
 - **Revision boundary:** response-matrix exports are read-only views of the canonical approval and evidence trail.
+- **Final hardening:** Codex session `019f6859-ae92-7280-930a-f7d7bf5b11ea` added revision-safe state writes, judge-route isolation, one-time note previews, safe managed-write paths, and frontend URL/attribute hardening. Its final review recorded 184 passing tests; see the [verification guide](docs/verification.md#final-codex-hardening-record).
 
 ## Paper maps and vault maintenance
 

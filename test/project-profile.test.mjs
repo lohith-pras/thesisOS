@@ -77,17 +77,26 @@ test("turns captured feedback into tasks once the profile becomes ready", () => 
       stage: { value: "experiments" }
     }
   };
-  const captured = recordFeedback(state, { title: "Target model", feedback: "Use orientation in the target model.", expectedRevision: 1 });
+  const initiallyCaptured = recordFeedback(state, { title: "Target model", feedback: "Use orientation in the target model.", expectedRevision: 1 });
+  const captured = recordFeedback(initiallyCaptured, {
+    title: "Target model",
+    feedback: "Use orientation in the target model and document the assumptions.",
+    mergeIntoFeedbackThreadId: initiallyCaptured.feedbackThreads[0].id,
+    expectedRevision: 2
+  }, { now: "2026-07-14T01:00:00.000Z" });
   const resumed = projectState.recordFeedbackTasks(captured, {
     feedbackThreadId: captured.feedbackThreads[0].id,
     feedback: captured.feedbackThreads[0].feedback,
     title: captured.feedbackThreads[0].title,
     context: { title: "Cognitive ISAC", objectives: [], selectedScope: { id: "scope-system", name: "System Model" }, targetLocations: [] },
     taskGraph: { tasks: [{ id: "task-model", title: "Revise the target model" }] }
-  }, { expectedRevision: 2 });
+  }, { expectedRevision: 3, now: "2026-07-14T02:00:00.000Z" });
   assert.equal(resumed.feedbackThreads.length, 1);
   assert.equal(resumed.feedbackThreads[0].id, captured.feedbackThreads[0].id);
   assert.equal(resumed.feedbackThreads[0].tasks[0].id, "task-model");
+  assert.deepEqual(resumed.feedbackThreads[0].placement, captured.feedbackThreads[0].placement);
+  assert.deepEqual(resumed.feedbackThreads[0].feedbackVersions, captured.feedbackThreads[0].feedbackVersions);
+  assert.equal(resumed.feedbackThreads[0].updatedAt, "2026-07-14T02:00:00.000Z");
   assert.equal(resumed.events.at(-1).type, "feedback.decomposed");
 });
 

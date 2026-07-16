@@ -8,6 +8,21 @@ npm run check:frontend
 npm test
 ```
 
+## Final Codex hardening record
+
+The final hardening pass ran in Codex session `019f6859-ae92-7280-930a-f7d7bf5b11ea` on 2026-07-16. It used six specialised sub-agents for security, correctness and test coverage, revision contracts, UI/XSS hardening, performance and maintainability, and a post-fix review. A separate write-path agent hardened managed workspace rendering.
+
+The verified changes from that pass were:
+
+- serialised, revision-checked canonical writes, including CLI commands and Zotero-library selection;
+- read-only `GET` state loading, state-file locking, and safe file permissions;
+- judge-mode endpoint isolation from local files, local applications, Zotero, and external model routes;
+- server-issued, one-time note-preview tokens before a filesystem write;
+- containment, filename, symlink, and temporary-file guards for Obsidian and managed workspace writes;
+- escaped dynamic UI attributes, HTTPS-only paper/source links, and safe external-link attributes.
+
+The final post-fix review recorded `npm test` as **184/184 passing**, with `npm run check` and `npm run check:frontend` also passing. This is a historical verification record; rerun the commands above before a new release. The reviewer noted one non-blocking edge case: a severely stalled filesystem could make the 30-second stale-lock reclamation policy conservative. An owner-token heartbeat lock would be a further hardening step for hostile or networked filesystems.
+
 ## Browser-level judge workflow
 
 ```bash

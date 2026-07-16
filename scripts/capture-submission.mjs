@@ -119,8 +119,36 @@ try {
   if (VERIFY_ONLY) {
     console.log(`Browser proof replay passed with ${selectedSourceId}: feedback → approval → selected evidence → grounded draft → Claim Traceback → citation rejection → reload.`);
   } else {
-    const frames = ["judge-overview.png", "judge-grounded-note.png", "judge-claim-traceback.png", "judge-citation-rejection.png"].map((name) => resolve(ASSETS, name));
-    const normalizedFrames = frames.flatMap((frame) => ["(", frame, "-resize", "1200x675", "-background", "#f7f8f5", "-gravity", "center", "-extent", "1200x675", ")"]);
+    const normalizeCover = (frame, gravity = "center") => [
+      "(",
+      frame,
+      "-resize",
+      "1200x675^",
+      "-gravity",
+      gravity,
+      "-extent",
+      "1200x675",
+      ")"
+    ];
+    const normalizeContain = (frame) => [
+      "(",
+      frame,
+      "-resize",
+      "1200x675",
+      "-background",
+      "#f7f8f5",
+      "-gravity",
+      "center",
+      "-extent",
+      "1200x675",
+      ")"
+    ];
+    const normalizedFrames = [
+      ...normalizeCover(resolve(ASSETS, "judge-overview.png")),
+      ...normalizeCover(resolve(ASSETS, "judge-grounded-note.png"), "north"),
+      ...normalizeCover(resolve(ASSETS, "judge-claim-traceback.png"), "north"),
+      ...normalizeContain(resolve(ASSETS, "judge-citation-rejection.png"))
+    ];
     const imageMagick = spawnSync("magick", ["-delay", "180", ...normalizedFrames, "-loop", "0", resolve(ASSETS, "thesisos-hero.gif")], { encoding: "utf8" });
     if (imageMagick.status !== 0) throw new Error(imageMagick.stderr || "ImageMagick failed to create the hero GIF.");
     console.log(`Captured submission assets in ${ASSETS}`);

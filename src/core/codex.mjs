@@ -10,8 +10,7 @@ import { ensureLiteratureTask } from "./decompose.mjs";
 
 function runCommand(command, args, cwd) {
   return new Promise((resolve, reject) => {
-    // npm exposes CLIs as .cmd shims on Windows, which require a shell to launch.
-    const child = spawn(command, args, { cwd, shell: process.platform === "win32", stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, { cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });

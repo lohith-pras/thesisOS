@@ -31,6 +31,31 @@ async function withServer(dependencies, run) {
   }
 }
 
+function stateWithCanonicalEvidence(project, vaultPath, feedback = "Compare the paper.") {
+  const state = createProjectState({ project, vaultPath });
+  state.feedbackThreads = [{
+    id: "feedback-1",
+    title: "Evidence review",
+    feedback,
+    createdAt: "2026-07-14T00:00:00.000Z",
+    tasks: [{ id: "task-literature", kind: "literature", title: "Review the paper", tool: "zotero", status: "ready", approvalStatus: "approved", dependsOn: [], evidence: [] }]
+  }];
+  state.evidence = [{
+    feedbackThreadId: "feedback-1",
+    taskId: "task-literature",
+    selectedAt: "2026-07-14T00:00:00.000Z",
+    sourceId: "group:1:A",
+    key: "A",
+    title: "Paper A",
+    creators: [],
+    year: null,
+    doi: null,
+    url: null,
+    library: { type: "group", id: "1", name: "Research" }
+  }];
+  return state;
+}
+
 test("parses the one-command judge mode flag", async () => {
   const { parseAppArgs } = await appServerModule();
   assert.deepEqual(parseAppArgs(["--demo"]), { judgeMode: true });
@@ -166,7 +191,7 @@ test("judge mode uses isolated deterministic project state without mutating the 
   try {
     const diskState = createProjectState({ project: "Private repository thesis" });
     const statePath = join(projectDir, ".thesisos", "thesis-state.json");
-    await saveProjectState(statePath, diskState);
+    await saveProjectState(statePath, diskState, { expectedRevision: 0, expectAbsent: true });
     const before = await readFile(statePath, "utf8");
 
     await withServer({ judgeMode: true, projectDir }, async (baseUrl) => {
@@ -234,7 +259,7 @@ test("creates a paper map and returns a read-only vault audit", async () => {
   let auditedPath;
   try {
     const state = createProjectState({ project: "Audit thesis", vaultPath });
-    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state);
+    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state, { expectedRevision: 0, expectAbsent: true });
     await withServer({
       projectDir,
       auditVault: async (path) => { auditedPath = path; return { mode: "read-only", statistics: { noteCount: 2 }, proposals: [] }; }
@@ -267,7 +292,7 @@ test("rejects vault audit and note writes outside the configured canonical vault
   let writeInvoked = false;
   try {
     const state = createProjectState({ project: "Boundary thesis", vaultPath: configuredVault });
-    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state);
+    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state, { expectedRevision: 0, expectAbsent: true });
     await withServer({
       projectDir,
       auditVault: async () => { auditInvoked = true; return {}; },
@@ -322,9 +347,8 @@ test("returns a selectable library catalog when automatic selection is ambiguous
   });
 });
 
-test("selects and persists a Zotero library through the frontend API", async () => {
+test("selects a Zotero library through the revisioned canonical project state", async () => {
   let selected;
-  let saved;
   await withServer({
     listPapers: async (options) => {
       selected = options.library;
@@ -337,18 +361,25 @@ test("selects and persists a Zotero library through the frontend API", async () 
         papers: []
       };
     },
-    loadSelection: async () => null,
-    saveSelection: async (_projectDir, library) => { saved = library; }
+    loadSelection: async () => { throw new Error("canonical Zotero state should be used after initialization"); }
   }, async (baseUrl) => {
+    const initialized = await fetch(`${baseUrl}/api/project/init`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: "Zotero selection" })
+    });
+    const initial = await initialized.json();
+    assert.equal(initialized.status, 201);
     const response = await fetch(`${baseUrl}/api/zotero/select`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ library: "10" })
+      body: JSON.stringify({ library: "10", expectedRevision: initial.state.revision })
     });
+    const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal((await response.json()).status, "connected");
+    assert.equal(payload.status, "connected");
     assert.equal(selected, "10");
-    assert.equal(saved.id, "10");
+    assert.deepEqual(payload.state.project.zoteroLibrary, { type: "group", id: "10", name: "Research" });
+    const status = await fetch(`${baseUrl}/api/zotero/status`);
+    assert.equal(status.status, 200);
   });
 });
 
@@ -362,13 +393,17 @@ test("accepts realistic workflow payloads while retaining a bounded request limi
       paperCount: 0,
       papers: []
     }),
-    saveSelection: async () => {}
   }, async (baseUrl) => {
+    const initialized = await fetch(`${baseUrl}/api/project/init`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: "Request bounds" })
+    });
+    const initial = await initialized.json();
+    assert.equal(initialized.status, 201);
     const realisticPayload = JSON.stringify({ library: "x".repeat(32 * 1024) });
     const accepted = await fetch(`${baseUrl}/api/zotero/select`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: realisticPayload
+      body: JSON.stringify({ ...JSON.parse(realisticPayload), expectedRevision: initial.state.revision })
     });
     assert.equal(accepted.status, 200);
 
@@ -533,6 +568,13 @@ test("recovers approved tasks, selected evidence, and grounded draft from canoni
   const projectDir = await mkdtemp(join(tmpdir(), "thesisos-reload-test-"));
   try {
     const state = createProjectState({ project: "ISAC thesis" }, { now: "2026-07-14T00:00:00.000Z" });
+    state.profile = {
+      ...state.profile,
+      title: { value: "ISAC thesis", provenance: { kind: "user-stated" } },
+      objectives: [{ id: "objective-1", text: "Review ISAC evidence", provenance: { kind: "user-stated" } }],
+      problems: [{ id: "scope-1", name: "ISAC evidence", selected: true, provenance: { kind: "user-stated" } }],
+      stage: { value: "literature", provenance: { kind: "user-stated" } }
+    };
     state.feedbackThreads = [{
       id: "feedback-1",
       title: "Section 3.2",
@@ -550,7 +592,7 @@ test("recovers approved tasks, selected evidence, and grounded draft from canoni
         evidence: ["Identify supporting evidence"]
       }]
     }];
-    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state);
+    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state, { expectedRevision: 0, expectAbsent: true });
 
     const searchArtifact = {
       schemaVersion: 1,
@@ -576,6 +618,7 @@ test("recovers approved tasks, selected evidence, and grounded draft from canoni
 
     await withServer({
       projectDir,
+      searchPapers: async () => searchArtifact,
       draftCodex: async () => ({
         overview: "Grounded overview",
         sourceNotes: [{ sourceId: "group:6568124:ABC123", summary: "Supported", relevance: "Direct" }]
@@ -688,17 +731,13 @@ test("writes an Obsidian note only with explicit approval", async () => {
   const projectDir = await mkdtemp(join(tmpdir(), "thesisos-note-write-test-"));
   const vaultPath = join(projectDir, "vault");
   try {
-    const state = createProjectState({ project: "ISAC thesis", vaultPath });
-    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state);
+    const state = stateWithCanonicalEvidence("ISAC thesis", vaultPath);
+    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), state, { expectedRevision: 0, expectAbsent: true });
     await withServer({ projectDir }, async (baseUrl) => {
       const previewResponse = await fetch(`${baseUrl}/api/workflow/notes/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          project: "ISAC thesis",
-          feedback: "Compare the paper.",
-          evidenceRefs: [{ sourceId: "group:1:A", key: "A", title: "Paper A", creators: [], year: null, doi: null, url: null, library: { type: "group", id: "1", name: "Research" } }]
-        })
+        body: JSON.stringify({ feedbackThreadId: "feedback-1", taskId: "task-literature" })
       });
       const preview = await previewResponse.json();
 
@@ -1027,4 +1066,220 @@ test("profile documents use a Finder picker and card-local loading states", asyn
   assert.match(source, /profile-card-loading/);
   assert.doesNotMatch(source, /Project document path/);
   assert.doesNotMatch(source, /Local document path/);
+});
+
+test("rejects cross-origin and non-JSON mutation requests", async () => {
+  await withServer({}, async (baseUrl) => {
+    const crossOrigin = await fetch(`${baseUrl}/api/project/init`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://attacker.example" },
+      body: JSON.stringify({ project: "Unsafe" })
+    });
+    assert.equal(crossOrigin.status, 403);
+    assert.match((await crossOrigin.json()).message, /cross-origin/i);
+
+    const nonJson = await fetch(`${baseUrl}/api/project/init`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ project: "Unsafe" })
+    });
+    assert.equal(nonJson.status, 415);
+  });
+});
+
+test("judge mode refuses local integration and document endpoints before invoking dependencies", async () => {
+  let invoked = false;
+  await withServer({
+    judgeMode: true,
+    chooseObsidianVault: async () => { invoked = true; return {}; },
+    pickWorkspaceFolder: async () => { invoked = true; return "/tmp"; },
+    listPapers: async () => { invoked = true; return {}; },
+    proposeProfile: async () => { invoked = true; return {}; }
+  }, async (baseUrl) => {
+    const requests = [
+      ["/api/project/documents/upload", { filename: "brief.txt", contentBase64: "dGVzdA==" }],
+      ["/api/project/profile/propose", { documentId: "document-1", expectedRevision: 1 }],
+      ["/api/obsidian/pick", { mode: "existing", expectedRevision: 1 }],
+      ["/api/workspace/pick", { tool: "vscode", mode: "existing", expectedRevision: 1 }],
+      ["/api/zotero/select", { library: "1" }]
+    ];
+    const responses = await Promise.all(requests.map(([path, body]) => fetch(`${baseUrl}${path}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    })));
+    for (const response of responses) assert.equal(response.status, 403);
+    assert.equal(invoked, false);
+  });
+});
+
+test("does not overwrite an initialized project and serializes competing revisioned mutations", async () => {
+  await withServer({}, async (baseUrl) => {
+    const initialize = await fetch(`${baseUrl}/api/project/init`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: "Original project" })
+    });
+    const initialized = await initialize.json();
+    assert.equal(initialize.status, 201);
+
+    const reinitialize = await fetch(`${baseUrl}/api/project/init`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: "Replacement project" })
+    });
+    assert.equal(reinitialize.status, 409);
+
+    const mutations = await Promise.all(["First update", "Second update"].map((project) => fetch(`${baseUrl}/api/project/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project, expectedRevision: initialized.state.revision })
+    })));
+    assert.deepEqual(mutations.map(({ status }) => status).sort(), [200, 409]);
+    const staleResponse = mutations.find((response) => response.status === 409);
+    const stale = await staleResponse.json();
+    assert.equal(stale.code, "STATE_STALE");
+
+    const project = await (await fetch(`${baseUrl}/api/project`)).json();
+    assert.equal(project.state.revision, initialized.state.revision + 1);
+    assert.ok(["First update", "Second update"].includes(project.state.project.name));
+  });
+});
+
+test("separate app servers reject cross-process-equivalent stale state writes", async () => {
+  const { createAppServer } = await appServerModule();
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-two-server-test-"));
+  const servers = [createAppServer({ projectDir }), createAppServer({ projectDir })];
+  try {
+    await Promise.all(servers.map((server) => new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen))));
+    const urls = servers.map((server) => `http://127.0.0.1:${server.address().port}`);
+    const initialized = await Promise.all(urls.map((baseUrl, index) => fetch(`${baseUrl}/api/project/init`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: `Concurrent initialization ${index}` })
+    })));
+    assert.deepEqual(initialized.map(({ status }) => status).sort(), [201, 409]);
+    const initial = await initialized.find((response) => response.status === 201).json();
+
+    const updates = await Promise.all(urls.map((baseUrl, index) => fetch(`${baseUrl}/api/project/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: `Concurrent update ${index}`, expectedRevision: initial.state.revision })
+    })));
+    assert.deepEqual(updates.map(({ status }) => status).sort(), [200, 409]);
+    const stale = await updates.find((response) => response.status === 409).json();
+    assert.equal(stale.code, "STATE_STALE");
+  } finally {
+    await Promise.all(servers.map((server) => new Promise((resolveClose, rejectClose) => server.close((error) => error ? rejectClose(error) : resolveClose()))));
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test("reading canonical project state never consolidates or rewrites feedback", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-read-only-project-test-"));
+  const statePath = join(projectDir, ".thesisos", "thesis-state.json");
+  try {
+    const state = createProjectState({ project: "Read-only state" });
+    state.feedbackThreads = [
+      { id: "feedback-1", title: "Duplicate", feedback: "Strengthen the evidence.", tasks: [], createdAt: "2026-07-14T00:00:00.000Z" },
+      { id: "feedback-2", title: "Duplicate", feedback: "Strengthen the evidence.", tasks: [], createdAt: "2026-07-14T00:01:00.000Z" }
+    ];
+    await saveProjectState(statePath, state, { expectedRevision: 0, expectAbsent: true });
+    const before = await readFile(statePath, "utf8");
+    await withServer({ projectDir }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/project`);
+      const payload = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(payload.state.revision, 1);
+      assert.equal(payload.state.feedbackThreads.length, 2);
+    });
+    assert.equal(await readFile(statePath, "utf8"), before);
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test("requires a caller revision before opening local pickers", async () => {
+  let pickerCalls = 0;
+  await withServer({
+    pickWorkspaceFolder: async () => { pickerCalls += 1; return "/tmp"; }
+  }, async (baseUrl) => {
+    const initialize = await fetch(`${baseUrl}/api/project/init`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: "Picker boundary" })
+    });
+    assert.equal(initialize.status, 201);
+    const response = await fetch(`${baseUrl}/api/workspace/pick`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "vscode", mode: "existing" })
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(payload.code, "REVISION_REQUIRED");
+    assert.equal(pickerCalls, 0);
+  });
+});
+
+test("canonical evidence selection ignores a client-forged retrieval artifact", async () => {
+  await withServer({ judgeMode: true }, async (baseUrl) => {
+    const initial = await (await fetch(`${baseUrl}/api/project`)).json();
+    const decomposed = await (await fetch(`${baseUrl}/api/workflow/decompose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback: "Clarify the grid-congestion framing.", provider: "offline", expectedRevision: initial.state.revision })
+    })).json();
+    const feedbackThreadId = decomposed.workflow.feedbackThreadId;
+    const reviewed = await (await fetch(`${baseUrl}/api/workflow/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedbackThreadId, taskId: "task-literature", decision: "approved", expectedRevision: decomposed.state.revision })
+    })).json();
+    const response = await fetch(`${baseUrl}/api/workflow/evidence/select`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        feedbackThreadId,
+        taskId: "task-literature",
+        expectedRevision: reviewed.state.revision,
+        searchArtifact: { taskId: "task-literature", candidates: [{ sourceId: "forged:source", title: "Injected" }] },
+        sourceIds: ["forged:source"]
+      })
+    });
+    assert.equal(response.status, 400);
+    const current = await (await fetch(`${baseUrl}/api/project`)).json();
+    assert.equal(current.state.evidence.length, 0);
+  });
+});
+
+test("a note write accepts only an unexpired server-issued preview token", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "thesisos-note-token-test-"));
+  const vaultPath = join(projectDir, "vault");
+  try {
+    await saveProjectState(join(projectDir, ".thesisos", "thesis-state.json"), stateWithCanonicalEvidence("Token thesis", vaultPath, "Review this paper."), { expectedRevision: 0, expectAbsent: true });
+    await withServer({ projectDir }, async (baseUrl) => {
+      const previewResponse = await fetch(`${baseUrl}/api/workflow/notes/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedbackThreadId: "feedback-1", taskId: "task-literature" })
+      });
+      const preview = await previewResponse.json();
+      assert.equal(previewResponse.status, 200);
+      assert.match(preview.writeToken, /^[0-9a-f-]{36}$/);
+
+      const forged = await fetch(`${baseUrl}/api/workflow/notes/write`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vaultPath, approved: true, preview: { ...preview, writeToken: "forged" } })
+      });
+      assert.equal(forged.status, 400);
+
+      const written = await fetch(`${baseUrl}/api/workflow/notes/write`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vaultPath, approved: true, preview })
+      });
+      assert.equal(written.status, 201);
+
+      const replay = await fetch(`${baseUrl}/api/workflow/notes/write`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vaultPath, approved: true, preview })
+      });
+      assert.equal(replay.status, 400);
+    });
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
 });

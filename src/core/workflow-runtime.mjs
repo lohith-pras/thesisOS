@@ -20,7 +20,7 @@ export function createWorkflowRuntime({
     capabilities: { restartDemo: false, inspectVault: true, writeVault: true },
     async stateExists() { try { await accessState(statePath); return true; } catch { return false; } },
     loadState: () => loadStateFile(statePath),
-    saveState: (state) => saveStateFile(statePath, state),
+    saveState: (state, options) => saveStateFile(statePath, state, options),
     library: () => null,
     restart: null,
     decompose: null,

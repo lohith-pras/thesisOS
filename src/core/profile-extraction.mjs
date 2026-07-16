@@ -90,7 +90,7 @@ export async function proposeProfileWithOpenAI({ document, approvedExternalProce
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: options.model ?? process.env.OPENAI_MODEL ?? "gpt-5.6",
+      model: options.model ?? process.env.OPENAI_MODEL ?? "gpt-5.6-sol",
       store: false,
       input: [
         { role: "system", content: "Extract only supported thesis-profile facts. Every field must cite the supplied sourceId and locator. Do not infer selected scope, stage, deadline, or deliverable." },

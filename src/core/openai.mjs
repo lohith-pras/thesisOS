@@ -2,7 +2,9 @@ import { validateTaskGraph } from "./schema.mjs";
 import { ensureLiteratureTask } from "./decompose.mjs";
 import { generateStructuredJson } from "./model-provider.mjs";
 
-const DEFAULT_MODEL = "gpt-5.6";
+// Pin the flagship tier so API responses and operational telemetry identify the
+// intended GPT-5.6 family member rather than the moving family alias.
+const DEFAULT_MODEL = "gpt-5.6-sol";
 
 const TASK_GRAPH_SCHEMA = {
   type: "object",

@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -16,9 +16,9 @@ import { selectEvidenceReferences } from "./core/evidence.mjs";
 import { createObsidianNotePreview, writeObsidianNote } from "./core/obsidian.mjs";
 import { createDeterministicDraft, draftEvidenceNoteWithOpenAI } from "./core/note-drafting.mjs";
 import { createDemoGroundedDraft, createDemoProjectState, DEMO_FEEDBACK_OPTIONS, decomposeDemoFeedback, demoLibraryPayload, searchDemoLibrary } from "./core/demo-library.mjs";
-import { loadZoteroSelection, saveZoteroSelection } from "./zotero-cli.mjs";
-import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault, pickFolder } from "./core/obsidian-vault.mjs";
-import { acceptProfileProposal, answerProfileQuestions, consolidateFeedbackThreads, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordProjectDocument, renameProject, saveProjectState, updateProjectPaths, updateProjectScan } from "./core/project-state.mjs";
+import { loadZoteroSelection } from "./zotero-cli.mjs";
+import { chooseObsidianVault, inspectObsidianVault, loadObsidianVault, pickFolder, validateVaultName } from "./core/obsidian-vault.mjs";
+import { acceptProfileProposal, answerProfileQuestions, createProfileProposal, createProjectState, loadProjectState, profileReadiness, recordProjectDocument, renameProject, saveProjectState, updateProjectPaths, updateProjectScan, updateZoteroLibrary } from "./core/project-state.mjs";
 import { scanThesisCheckout } from "./core/thesis-scan.mjs";
 import { extractProjectDocument } from "./core/project-document.mjs";
 import { proposeProfileWithCodex, proposeProfileWithOpenAI } from "./core/profile-extraction.mjs";
@@ -39,6 +39,14 @@ const APP_DIR = resolve(WORKSPACE_DIR, "app");
 const LANDING_DIR = resolve(WORKSPACE_DIR, "landing");
 const MAX_REQUEST_BODY_SIZE = 1 * 1024 * 1024;
 const MAX_DOCUMENT_UPLOAD_BODY_SIZE = 28 * 1024 * 1024;
+const NOTE_PREVIEW_TTL_MS = 15 * 60 * 1000;
+const MAX_PENDING_NOTE_PREVIEWS = 256;
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "no-referrer",
+  "Content-Security-Policy": "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; img-src 'self' data:"
+};
 const CONTENT_TYPES = new Map([
   [".html", "text/html; charset=utf-8"],
   [".js", "text/javascript; charset=utf-8"],
@@ -49,7 +57,8 @@ const CONTENT_TYPES = new Map([
 function sendJson(response, statusCode, body) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
+    ...SECURITY_HEADERS
   });
   response.end(`${JSON.stringify(body)}\n`);
 }
@@ -114,7 +123,7 @@ function openExternalUrl(url) {
     const [command, args] = process.platform === "darwin"
       ? ["open", [url]]
       : process.platform === "win32"
-        ? ["cmd", ["/c", "start", "", url]]
+        ? ["explorer.exe", [url]]
         : ["xdg-open", [url]];
     const child = spawn(command, args, { stdio: "ignore" });
     child.once("error", (error) => rejectOpen(new Error(`Could not open Overleaf: ${error.message}`)));
@@ -123,6 +132,8 @@ function openExternalUrl(url) {
 }
 
 async function readJsonBody(request, maxSize = MAX_REQUEST_BODY_SIZE) {
+  const contentType = String(request.headers["content-type"] ?? "").toLowerCase();
+  if (!contentType.startsWith("application/json")) throw httpError(415, "API requests with a body must use application/json.");
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
@@ -141,6 +152,36 @@ function httpError(statusCode, message) {
   return Object.assign(new Error(message), { statusCode });
 }
 
+function requireExpectedRevision(state, expectedRevision) {
+  if (expectedRevision === undefined || expectedRevision === null) {
+    const error = new Error("REVISION_REQUIRED: include expectedRevision from GET /api/project before changing this workspace.");
+    error.code = "REVISION_REQUIRED";
+    throw error;
+  }
+  if (expectedRevision !== state.revision) {
+    const error = new Error(`STATE_STALE: expected revision ${expectedRevision}, current revision is ${state.revision}.`);
+    error.code = "STATE_STALE";
+    throw error;
+  }
+}
+
+function requireTrustedMutationOrigin(request) {
+  if (!new Set(["POST", "PUT", "PATCH", "DELETE"]).has(request.method)) return;
+  const origin = request.headers.origin;
+  if (origin && origin !== `http://${request.headers.host}`) {
+    throw httpError(403, "Cross-origin mutation requests are not allowed.");
+  }
+  if (!origin && request.headers["sec-fetch-site"] === "cross-site") {
+    throw httpError(403, "Cross-origin mutation requests are not allowed.");
+  }
+}
+
+function mutationRequestError(error) {
+  return new Set(["REVISION_REQUIRED", "STATE_STALE", "PROFILE_INCOMPLETE"]).has(error.code)
+    ? error
+    : httpError(400, error.message);
+}
+
 async function serveStatic(rootDir, relativePath, response) {
   const filePath = resolve(rootDir, relativePath);
   if (!filePath.startsWith(`${rootDir}/`) && filePath !== resolve(rootDir, "index.html")) {
@@ -151,7 +192,8 @@ async function serveStatic(rootDir, relativePath, response) {
     const content = await readFile(filePath);
     response.writeHead(200, {
       "Content-Type": CONTENT_TYPES.get(extname(filePath)) ?? "application/octet-stream",
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store",
+      ...SECURITY_HEADERS
     });
     response.end(content);
   } catch (error) {
@@ -164,7 +206,6 @@ export function createAppServer(dependencies = {}) {
   const projectDir = dependencies.projectDir ?? WORKSPACE_DIR;
   const listPapers = dependencies.listPapers ?? listZoteroPapers;
   const loadSelection = dependencies.loadSelection ?? loadZoteroSelection;
-  const saveSelection = dependencies.saveSelection ?? saveZoteroSelection;
   const decomposeOffline = dependencies.decomposeOffline ?? decomposeFeedback;
   const decomposeCodex = dependencies.decomposeCodex ?? decomposeFeedbackWithCodex;
   const decomposeOpenAI = dependencies.decomposeOpenAI ?? decomposeFeedbackWithOpenAI;
@@ -191,6 +232,7 @@ export function createAppServer(dependencies = {}) {
   const launchWorkspaceApp = dependencies.launchWorkspaceApp ?? openLocalApp;
   const launchExternalUrl = dependencies.launchExternalUrl ?? openExternalUrl;
   const pickWorkspaceFolder = dependencies.pickWorkspaceFolder ?? pickFolder;
+  const chooseVault = dependencies.chooseObsidianVault ?? chooseObsidianVault;
   const canonicalStatePath = resolve(projectDir, ".thesisos", "thesis-state.json");
   const runtime = createWorkflowRuntime({
     judgeMode,
@@ -205,21 +247,46 @@ export function createAppServer(dependencies = {}) {
     draftDemo
   });
   const stateExists = () => runtime.stateExists();
-  const loadCanonicalState = async () => {
-    const state = await runtime.loadState();
-    const consolidated = consolidateFeedbackThreads(state);
-    if (consolidated === state) return state;
-    await runtime.saveState(consolidated);
-    return consolidated;
+  let mutationTail = Promise.resolve();
+  const serializeCanonicalMutation = (operation) => {
+    const run = mutationTail.then(operation, operation);
+    mutationTail = run.catch(() => {});
+    return run;
   };
-  const persistCanonicalState = (state) => runtime.saveState(state);
+  const loadCanonicalState = () => runtime.loadState();
+  const persistCanonicalState = (state, options = {}) => runtime.saveState(state, typeof options === "number" ? { expectedRevision: options } : options);
+  const pendingNotePreviews = new Map();
+  const issueNotePreview = (preview) => {
+    const now = Date.now();
+    for (const [token, pending] of pendingNotePreviews) if (pending.expiresAt <= now) pendingNotePreviews.delete(token);
+    while (pendingNotePreviews.size >= MAX_PENDING_NOTE_PREVIEWS) pendingNotePreviews.delete(pendingNotePreviews.keys().next().value);
+    const writeToken = randomUUID();
+    pendingNotePreviews.set(writeToken, { preview, expiresAt: now + NOTE_PREVIEW_TTL_MS });
+    return { ...preview, writeToken };
+  };
+  const consumeNotePreview = (candidate) => {
+    const writeToken = candidate?.writeToken;
+    const pending = typeof writeToken === "string" ? pendingNotePreviews.get(writeToken) : null;
+    if (!pending || pending.expiresAt <= Date.now()) {
+      if (writeToken) pendingNotePreviews.delete(writeToken);
+      throw httpError(400, "Create a fresh note preview before approving a filesystem write.");
+    }
+    pendingNotePreviews.delete(writeToken);
+    return pending.preview;
+  };
   const loadConfiguredVaultRoot = async () => {
     if (await stateExists()) {
       const state = await loadCanonicalState();
-      if (state.project.vaultPath) return resolve(state.project.vaultPath);
+      return state.project.vaultPath ? resolve(state.project.vaultPath) : null;
     }
+    if (runtime.kind === "judge") return null;
     const legacyPath = await loadObsidianVault(projectDir);
     return legacyPath ? resolve(legacyPath) : null;
+  };
+  const selectedZoteroLibrary = async () => {
+    if (runtime.kind === "judge") return null;
+    if (await stateExists()) return (await loadCanonicalState()).project.zoteroLibrary ?? null;
+    return loadSelection(projectDir);
   };
   const requireConfiguredVaultRoot = async (requestedPath) => {
     const configuredRoot = await loadConfiguredVaultRoot();
@@ -229,18 +296,50 @@ export function createAppServer(dependencies = {}) {
     }
     return configuredRoot;
   };
-  const revisionWorkflow = createRevisionWorkflow({ loadState: loadCanonicalState, persistState: persistCanonicalState, previewNote });
+  const revisionWorkflow = createRevisionWorkflow({ loadState: loadCanonicalState, persistState: persistCanonicalState, previewNote, serialize: serializeCanonicalMutation });
   const canonicalWorkflow = (state, feedbackThreadId = null) => {
     const thread = feedbackThreadId ? state.feedbackThreads.find(({ id }) => id === feedbackThreadId) : state.feedbackThreads.at(-1);
     if (!thread) return null;
     const workflow = workflowReadModel(state, thread.id);
     const preview = workflow.draft ? previewNote({ project: state.project.name, feedback: workflow.feedback, evidenceRefs: workflow.selectedEvidence, draft: workflow.draft }) : null;
-    return { ...workflow, preview };
+    return { ...workflow, preview: preview ? issueNotePreview(preview) : null };
   };
+  const canonicalNoteInput = async (body) => {
+    if (!body.feedbackThreadId || !body.taskId) {
+      throw httpError(400, "A canonical feedback thread and task are required before preparing a note in this workspace.");
+    }
+    const state = await loadCanonicalState();
+    const thread = state.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
+    if (!thread) throw httpError(404, "Feedback thread was not found.");
+    const task = thread.tasks?.find(({ id }) => id === body.taskId);
+    if (!task) throw httpError(404, "Task was not found.");
+    const evidenceRefs = state.evidence.filter((record) => record.feedbackThreadId === thread.id && record.taskId === task.id);
+    if (!evidenceRefs.length) throw httpError(409, "Selected canonical evidence is required before preparing a note.");
+    const draft = evidenceRefs.find((record) => record.draft)?.draft ?? null;
+    return { project: state.project.name, feedback: thread.feedback, evidenceRefs, draft };
+  };
+  const issueWorkflowPreview = (result) => result?.workflow?.preview
+    ? { ...result, workflow: { ...result.workflow, preview: issueNotePreview(result.workflow.preview) } }
+    : result;
+  const judgeBlockedRoutes = new Set([
+    "/api/project/init",
+    "/api/project/paths",
+    "/api/project/documents/import",
+    "/api/project/documents/upload",
+    "/api/project/profile/propose",
+    "/api/obsidian/pick",
+    "/api/workspace/pick",
+    "/api/workspace/open",
+    "/api/zotero/select"
+  ]);
 
   return createServer(async (request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
     try {
+      requireTrustedMutationOrigin(request);
+      if (runtime.kind === "judge" && judgeBlockedRoutes.has(url.pathname)) {
+        throw httpError(403, "Judge mode is isolated and cannot access local files, applications, Zotero, or external models.");
+      }
       if (request.method === "GET" && url.pathname === "/api/project") {
         if (!await stateExists()) { sendJson(response, 200, { initialized: false }); return; }
         const state = await loadCanonicalState();
@@ -249,7 +348,7 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "GET" && url.pathname === "/api/workflow") {
         if (!await stateExists()) throw httpError(409, "Create a research workspace before opening feedback history.");
-        try { sendJson(response, 200, await revisionWorkflow.read(url.searchParams.get("feedbackThreadId"))); }
+        try { sendJson(response, 200, issueWorkflowPreview(await revisionWorkflow.read(url.searchParams.get("feedbackThreadId")))); }
         catch (error) { throw httpError(error.code === "NOT_FOUND" ? 404 : 400, error.message); }
         return;
       }
@@ -275,12 +374,16 @@ export function createAppServer(dependencies = {}) {
         if (!body.project?.trim()) throw httpError(400, "Project name is required.");
         const thesisDir = typeof body.thesisDir === "string" && body.thesisDir.trim() ? resolve(body.thesisDir) : null;
         const vaultPath = typeof body.vaultPath === "string" && body.vaultPath.trim() ? resolve(body.vaultPath) : null;
-        let state = createProjectState({ project: body.project, thesisDir, vaultPath });
-        if (thesisDir) {
-          const scan = await scanThesisCheckout(thesisDir);
-          state = updateProjectScan(state, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] });
-        }
-        await persistCanonicalState(state);
+        const state = await serializeCanonicalMutation(async () => {
+          if (await stateExists()) throw httpError(409, "A research workspace already exists. Update it through the revisioned project settings instead.");
+          let nextState = createProjectState({ project: body.project, thesisDir, vaultPath });
+          if (thesisDir) {
+            const scan = await scanThesisCheckout(thesisDir);
+            nextState = updateProjectScan(nextState, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] }, { expectedRevision: nextState.revision });
+          }
+          await persistCanonicalState(nextState, { expectedRevision: 0, expectAbsent: true });
+          return nextState;
+        });
         sendJson(response, 201, { state, readiness: profileReadiness(state) });
         return;
       }
@@ -294,7 +397,7 @@ export function createAppServer(dependencies = {}) {
         const body = await readJsonBody(request);
         try {
           sendJson(response, 200, await revisionWorkflow.confirmPlacement(body));
-        } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
+        } catch (error) { throw mutationRequestError(error); }
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/paths") {
@@ -307,36 +410,49 @@ export function createAppServer(dependencies = {}) {
           else {
             try {
               const url = new URL(String(body.overleafUrl).trim());
-              if (url.protocol !== "https:" || !/(^|\.)overleaf\.com$/i.test(url.hostname)) throw new Error();
+              if (url.protocol !== "https:" || url.username || url.password || !/(^|\.)overleaf\.com$/i.test(url.hostname)) throw new Error();
               overleafUrl = url.toString();
             } catch { throw httpError(400, "Use a valid https://www.overleaf.com project URL."); }
           }
         }
-        let state = updateProjectPaths(await loadCanonicalState(), { thesisDir, vaultPath, overleafUrl, expectedRevision: body.expectedRevision });
-        if (thesisDir) {
-          const scan = await scanThesisCheckout(thesisDir);
-          state = updateProjectScan(state, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] });
-        }
-        await persistCanonicalState(state);
+        const state = await serializeCanonicalMutation(async () => {
+          let nextState = updateProjectPaths(await loadCanonicalState(), { thesisDir, vaultPath, overleafUrl, expectedRevision: body.expectedRevision });
+          if (thesisDir) {
+            const scan = await scanThesisCheckout(thesisDir);
+            nextState = updateProjectScan(nextState, { scan, mapping: mapBibliographyToSources(scan.bibliography, nextState.sources), sources: nextState.sources }, { expectedRevision: nextState.revision });
+          }
+          await persistCanonicalState(nextState, body.expectedRevision);
+          return nextState;
+        });
         sendJson(response, 200, { state, readiness: profileReadiness(state) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/settings") {
         const body = await readJsonBody(request);
         try {
-          const state = renameProject(await loadCanonicalState(), { name: body.project, expectedRevision: body.expectedRevision });
-          await persistCanonicalState(state);
+          const state = await serializeCanonicalMutation(async () => {
+            const nextState = renameProject(await loadCanonicalState(), { name: body.project, expectedRevision: body.expectedRevision });
+            await persistCanonicalState(nextState, body.expectedRevision);
+            return nextState;
+          });
           sendJson(response, 200, { state, readiness: profileReadiness(state) });
-        } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
+        } catch (error) { throw mutationRequestError(error); }
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/documents/import") {
         const body = await readJsonBody(request);
-        let state = await loadCanonicalState();
-        const extracted = await extractDocument(resolve(body.path));
-        const id = `document-${extracted.metadata.sha256.slice(0, 12)}`;
-        state = recordProjectDocument(state, { id, ...extracted.metadata, localPath: resolve(body.path) }, { expectedRevision: body.expectedRevision });
-        await persistCanonicalState(state);
+        if (typeof body.path !== "string" || !body.path.trim()) throw httpError(400, "Project document path is required.");
+        const state = await serializeCanonicalMutation(async () => {
+          const current = await loadCanonicalState();
+          requireExpectedRevision(current, body.expectedRevision);
+          const localPath = resolve(body.path);
+          const extracted = await extractDocument(localPath);
+          const id = `document-${extracted.metadata.sha256.slice(0, 12)}`;
+          const nextState = recordProjectDocument(current, { id, ...extracted.metadata, localPath }, { expectedRevision: body.expectedRevision });
+          await persistCanonicalState(nextState, body.expectedRevision);
+          return nextState;
+        });
+        const id = state.documents.at(-1)?.id;
         sendJson(response, 200, { state, readiness: profileReadiness(state), document: state.documents.find((item) => item.id === id) });
         return;
       }
@@ -346,47 +462,69 @@ export function createAppServer(dependencies = {}) {
         if (typeof body.contentBase64 !== "string" || !body.contentBase64) throw httpError(400, "Document content is required.");
         const filename = basename(body.filename.trim());
         if (!new Set([".pdf", ".md", ".txt"]).has(extname(filename).toLowerCase())) throw httpError(400, "Use a PDF, Markdown, or plain-text project document.");
-        const data = Buffer.from(body.contentBase64, "base64");
+        const base64 = body.contentBase64.replace(/\s/g, "");
+        if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(base64)) throw httpError(400, "Document content must be valid base64.");
+        const data = Buffer.from(base64, "base64");
         if (!data.length || data.length > 20 * 1024 * 1024) throw httpError(data.length ? 413 : 400, data.length ? "The project document is larger than 20 MB." : "Document content is empty.");
+        await serializeCanonicalMutation(async () => requireExpectedRevision(await loadCanonicalState(), body.expectedRevision));
         const uploadDir = resolve(projectDir, ".thesisos", "uploads", randomUUID());
-        await mkdir(uploadDir, { recursive: true });
+        await mkdir(uploadDir, { recursive: true, mode: 0o700 });
         const path = resolve(uploadDir, filename);
-        await writeFile(path, data, { flag: "wx" });
-        let state = await loadCanonicalState();
-        const extracted = await extractDocument(path);
-        const id = `document-${extracted.metadata.sha256.slice(0, 12)}`;
-        state = recordProjectDocument(state, { id, ...extracted.metadata, localPath: path }, { expectedRevision: body.expectedRevision });
-        await persistCanonicalState(state);
+        await writeFile(path, data, { flag: "wx", mode: 0o600 });
+        let state;
+        let id;
+        try {
+          const extracted = await extractDocument(path);
+          id = `document-${extracted.metadata.sha256.slice(0, 12)}`;
+          state = await serializeCanonicalMutation(async () => {
+            const current = await loadCanonicalState();
+            const nextState = recordProjectDocument(current, { id, ...extracted.metadata, localPath: path }, { expectedRevision: body.expectedRevision });
+            await persistCanonicalState(nextState, body.expectedRevision);
+            return nextState;
+          });
+        } catch (error) {
+          await rm(uploadDir, { recursive: true, force: true });
+          throw error;
+        }
         sendJson(response, 200, { state, readiness: profileReadiness(state), document: state.documents.find((item) => item.id === id) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/profile/propose") {
         const body = await readJsonBody(request);
-        let state = await loadCanonicalState();
-        if (body.expectedRevision !== state.revision) throw Object.assign(new Error(`STATE_STALE: expected revision ${body.expectedRevision}, current revision is ${state.revision}.`), { code: "STATE_STALE" });
-        const metadata = state.documents.find(({ id }) => id === body.documentId);
+        const current = await loadCanonicalState();
+        requireExpectedRevision(current, body.expectedRevision);
+        const metadata = current.documents.find(({ id }) => id === body.documentId);
         if (!metadata) throw httpError(404, "Project document was not found.");
         const extracted = await extractDocument(metadata.localPath);
         const provider = body.provider ?? "codex";
         if (!new Set(["codex", "openai"]).has(provider)) throw httpError(400, "Profile provider must be 'codex' or 'openai'.");
         const proposer = provider === "openai" ? proposeProfileOpenAI : proposeProfile;
-        const proposal = await proposer({ document: { id: metadata.id, ...extracted }, approvedExternalProcessing: body.approvedExternalProcessing }, { cwd: state.project.thesisDir ?? projectDir, model: body.model });
-        state = createProfileProposal(state, proposal, { provider, model: body.model, expectedRevision: body.expectedRevision });
-        await persistCanonicalState(state);
+        const proposal = await proposer({ document: { id: metadata.id, ...extracted }, approvedExternalProcessing: body.approvedExternalProcessing }, { cwd: current.project.thesisDir ?? projectDir, model: body.model });
+        const state = await serializeCanonicalMutation(async () => {
+          const nextState = createProfileProposal(await loadCanonicalState(), proposal, { provider, model: body.model, expectedRevision: body.expectedRevision });
+          await persistCanonicalState(nextState, body.expectedRevision);
+          return nextState;
+        });
         sendJson(response, 200, { state, readiness: profileReadiness(state) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/profile/review") {
         const body = await readJsonBody(request);
-        let state = acceptProfileProposal(await loadCanonicalState(), body);
-        await persistCanonicalState(state);
+        const state = await serializeCanonicalMutation(async () => {
+          const nextState = acceptProfileProposal(await loadCanonicalState(), body);
+          await persistCanonicalState(nextState, body.expectedRevision);
+          return nextState;
+        });
         sendJson(response, 200, { state, readiness: profileReadiness(state) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/profile/answers") {
         const body = await readJsonBody(request);
-        let state = answerProfileQuestions(await loadCanonicalState(), body);
-        await persistCanonicalState(state);
+        const state = await serializeCanonicalMutation(async () => {
+          const nextState = answerProfileQuestions(await loadCanonicalState(), body);
+          await persistCanonicalState(nextState, body.expectedRevision);
+          return nextState;
+        });
         sendJson(response, 200, { state, readiness: profileReadiness(state) });
         return;
       }
@@ -395,14 +533,16 @@ export function createAppServer(dependencies = {}) {
           sendJson(response, 200, runtime.library());
           return;
         }
-        const savedLibrary = await loadSelection(projectDir);
+        const savedLibrary = await selectedZoteroLibrary();
         const artifact = await listPapers(savedLibrary ? { savedLibrary } : {});
         sendJson(response, 200, connectionPayload(artifact));
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/project/seed-references/reconcile") {
         const state = await loadCanonicalState();
-        const library = runtime.kind === "judge" ? runtime.library() : connectionPayload(await listPapers(await loadSelection(projectDir)));
+        const library = runtime.kind === "judge"
+          ? runtime.library()
+          : connectionPayload(await listPapers(state.project.zoteroLibrary ? { savedLibrary: state.project.zoteroLibrary } : {}));
         sendJson(response, 200, { report: reconcileSeedReferences(state.profile?.seedReferences, library.papers ?? []), advisory: true });
         return;
       }
@@ -469,15 +609,27 @@ export function createAppServer(dependencies = {}) {
       if (request.method === "POST" && url.pathname === "/api/obsidian/pick") {
         const body = await readJsonBody(request);
         if (!new Set(["existing", "create"]).has(body.mode)) throw httpError(400, "Vault mode must be 'existing' or 'create'.");
-        const vault = await chooseObsidianVault(projectDir, { mode: body.mode, name: body.name });
-        if (await stateExists()) {
-          const current = await loadCanonicalState();
-          const state = updateProjectPaths(current, { vaultPath: vault.path, expectedRevision: current.revision });
-          await persistCanonicalState(state);
+        if (body.mode === "create") {
+          try { validateVaultName(body.name); }
+          catch (error) { throw httpError(400, error.message); }
+        }
+        const selection = await serializeCanonicalMutation(async () => {
+          if (await stateExists()) {
+            const current = await loadCanonicalState();
+            requireExpectedRevision(current, body.expectedRevision);
+            const selectedVault = await chooseVault(projectDir, { mode: body.mode, name: body.name, persist: false });
+            const nextState = updateProjectPaths(current, { vaultPath: selectedVault.path, expectedRevision: body.expectedRevision });
+            await persistCanonicalState(nextState, body.expectedRevision);
+            return { vault: selectedVault, state: nextState };
+          }
+          return { vault: await chooseVault(projectDir, { mode: body.mode, name: body.name }), state: null };
+        });
+        if (selection.state) {
+          const { vault, state } = selection;
           sendJson(response, 200, { configured: true, vault, state, readiness: profileReadiness(state) });
           return;
         }
-        sendJson(response, 200, { configured: true, vault });
+        sendJson(response, 200, { configured: true, vault: selection.vault });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/workspace/pick") {
@@ -485,20 +637,24 @@ export function createAppServer(dependencies = {}) {
         if (body.tool !== "vscode") throw httpError(400, "Only a VS Code folder can be selected here.");
         if (!new Set(["existing", "create"]).has(body.mode ?? "existing")) throw httpError(400, "Workspace folder mode must be 'existing' or 'create'.");
         const mode = body.mode ?? "existing";
-        let thesisDir = await pickWorkspaceFolder(mode === "create" ? "code-create" : "vscode");
-        if (mode === "create") {
-          const name = typeof body.name === "string" ? body.name.trim() : "";
-          if (!/^[a-zA-Z0-9][a-zA-Z0-9._ -]{0,100}$/.test(name)) throw httpError(400, "Use a short folder name containing letters, numbers, spaces, dots, dashes, or underscores.");
-          thesisDir = resolve(thesisDir, name);
-          try { await mkdir(thesisDir); }
-          catch (error) { if (error.code === "EEXIST") throw httpError(409, "A folder with that name already exists. Choose another name."); throw error; }
-          await writeFile(resolve(thesisDir, "README.md"), `# ${name}\n\nCreated by Proofline as a local code workspace.\n`, { encoding: "utf8", flag: "wx" });
-        }
-        const current = await loadCanonicalState();
-        let state = updateProjectPaths(current, { thesisDir, expectedRevision: current.revision });
-        const scan = await scanThesisCheckout(thesisDir);
-        state = updateProjectScan(state, { scan, mapping: mapBibliographyToSources(scan.bibliography, []), sources: [] });
-        await persistCanonicalState(state);
+        const name = mode === "create" && typeof body.name === "string" ? body.name.trim() : "";
+        if (mode === "create" && !/^[a-zA-Z0-9][a-zA-Z0-9._ -]{0,100}$/.test(name)) throw httpError(400, "Use a short folder name containing letters, numbers, spaces, dots, dashes, or underscores.");
+        const { state, thesisDir } = await serializeCanonicalMutation(async () => {
+          const current = await loadCanonicalState();
+          requireExpectedRevision(current, body.expectedRevision);
+          let selectedDir = await pickWorkspaceFolder(mode === "create" ? "code-create" : "vscode");
+          if (mode === "create") {
+            selectedDir = resolve(selectedDir, name);
+            try { await mkdir(selectedDir); }
+            catch (error) { if (error.code === "EEXIST") throw httpError(409, "A folder with that name already exists. Choose another name."); throw error; }
+            await writeFile(resolve(selectedDir, "README.md"), `# ${name}\n\nCreated by Proofline as a local code workspace.\n`, { encoding: "utf8", flag: "wx" });
+          }
+          const scan = await scanThesisCheckout(selectedDir);
+          let nextState = updateProjectPaths(current, { thesisDir: selectedDir, expectedRevision: body.expectedRevision });
+          nextState = updateProjectScan(nextState, { scan, mapping: mapBibliographyToSources(scan.bibliography, nextState.sources), sources: nextState.sources }, { expectedRevision: nextState.revision });
+          await persistCanonicalState(nextState, body.expectedRevision);
+          return { state: nextState, thesisDir: selectedDir };
+        });
         sendJson(response, 200, { state, readiness: profileReadiness(state), path: thesisDir });
         return;
       }
@@ -527,9 +683,16 @@ export function createAppServer(dependencies = {}) {
           sendJson(response, 400, { status: "invalid_request", message: "A Zotero library name or ID is required." });
           return;
         }
+        if (!await stateExists()) throw httpError(409, "Create a research workspace before selecting its Zotero library.");
+        requireExpectedRevision(await loadCanonicalState(), body.expectedRevision);
         const artifact = await listPapers({ library: body.library.trim() });
-        await saveSelection(projectDir, artifact.library);
-        sendJson(response, 200, connectionPayload(artifact));
+        const state = await serializeCanonicalMutation(async () => {
+          const current = await loadCanonicalState();
+          const nextState = updateZoteroLibrary(current, artifact.library, { expectedRevision: body.expectedRevision });
+          await persistCanonicalState(nextState, body.expectedRevision);
+          return nextState;
+        });
+        sendJson(response, 200, { ...connectionPayload(artifact), state, readiness: profileReadiness(state) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/workflow/decompose") {
@@ -597,7 +760,7 @@ export function createAppServer(dependencies = {}) {
           try {
             const result = await revisionWorkflow.reviewTask(body);
             sendJson(response, 200, { ...result, taskGraph: result.workflow.taskGraph });
-          } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
+          } catch (error) { throw mutationRequestError(error); }
           return;
         }
         if (typeof body.taskId !== "string" || !body.taskId.trim()) throw httpError(400, "A task ID is required.");
@@ -612,17 +775,22 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/workflow/search") {
         const body = await readJsonBody(request);
-        if (body.feedbackThreadId && await stateExists()) {
+        const hasCanonicalState = await stateExists();
+        if (hasCanonicalState && !body.feedbackThreadId) {
+          throw httpError(400, "A canonical feedback thread is required before searching from this workspace.");
+        }
+        if (body.feedbackThreadId && hasCanonicalState) {
           const state = await loadCanonicalState();
           const thread = state.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
           if (!thread) throw httpError(404, "Feedback thread was not found.");
           const context = buildThesisContext(state, "retrieval", { feedback: thread.feedback, placement: thread.placement });
           const taskGraph = workflowReadModel(state, thread.id).taskGraph;
           const query = typeof body.query === "string" && body.query.trim() ? body.query.trim() : context.query;
+          const useDemoFixture = body.mode === "demo" || runtime.search;
           let artifact;
-          if (body.mode === "demo" || runtime.search) artifact = await (runtime.search ? runtime.search(taskGraph, { query }) : searchDemo(taskGraph, { query }));
+          if (useDemoFixture) artifact = await (runtime.search ? runtime.search(taskGraph, { query }) : searchDemo(taskGraph, { query }));
           else {
-            const savedLibrary = await loadSelection(projectDir);
+            const savedLibrary = state.project.zoteroLibrary ?? null;
             artifact = await searchPapers(taskGraph, { ...(savedLibrary ? { savedLibrary } : {}), query, cachePath: resolve(projectDir, ".thesisos-cache", "zotero-embeddings.json") });
           }
           sendJson(response, 200, { ...artifact, retrievalAudit: { query, projection: context } });
@@ -652,11 +820,30 @@ export function createAppServer(dependencies = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/workflow/evidence/select") {
         const body = await readJsonBody(request);
-        if (body.feedbackThreadId && await stateExists()) {
+        const hasCanonicalState = await stateExists();
+        if (hasCanonicalState && !body.feedbackThreadId) {
+          throw httpError(400, "A canonical feedback thread is required before selecting evidence in this workspace.");
+        }
+        if (body.feedbackThreadId && hasCanonicalState) {
           try {
-            const result = await revisionWorkflow.attachEvidence(body);
+            const state = await loadCanonicalState();
+            const thread = state.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
+            if (!thread) throw httpError(404, "Feedback thread was not found.");
+            const context = buildThesisContext(state, "retrieval", { feedback: thread.feedback, placement: thread.placement });
+            const taskGraph = workflowReadModel(state, thread.id).taskGraph;
+            const query = typeof body.query === "string" && body.query.trim() ? body.query.trim() : context.query;
+            const useDemoFixture = body.mode === "demo" || runtime.search;
+            const savedLibrary = useDemoFixture ? null : state.project.zoteroLibrary ?? null;
+            const searchArtifact = useDemoFixture
+              ? await (runtime.search ? runtime.search(taskGraph, { query }) : searchDemo(taskGraph, { query }))
+              : await searchPapers(taskGraph, {
+                ...(savedLibrary ? { savedLibrary } : {}),
+                query,
+                cachePath: resolve(projectDir, ".thesisos-cache", "zotero-embeddings.json")
+              });
+            const result = issueWorkflowPreview(await revisionWorkflow.attachEvidence({ ...body, searchArtifact }));
             sendJson(response, 200, { ...result, taskGraph: result.workflow.taskGraph, selection: result.workflow.evidenceSelection });
-          } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
+          } catch (error) { throw mutationRequestError(error); }
           return;
         }
         try {
@@ -669,7 +856,17 @@ export function createAppServer(dependencies = {}) {
       if (request.method === "POST" && url.pathname === "/api/workflow/notes/preview") {
         const body = await readJsonBody(request);
         try {
-          sendJson(response, 200, previewNote(body));
+          const input = await stateExists() ? await canonicalNoteInput(body) : body;
+          if (body.citationBoundaryTest === true) {
+            const attemptedSourceId = typeof body.attemptedSourceId === "string" && body.attemptedSourceId.trim()
+              ? body.attemptedSourceId.trim()
+              : "proofline:test:UNSELECTED";
+            input.draft = {
+              overview: "Intentional citation-boundary check.",
+              sourceNotes: [{ sourceId: attemptedSourceId, summary: "This source was never selected.", relevance: "It must be rejected." }]
+            };
+          }
+          sendJson(response, 200, issueNotePreview(previewNote(input)));
         } catch (error) {
           throw httpError(400, error.message);
         }
@@ -678,7 +875,11 @@ export function createAppServer(dependencies = {}) {
       if (request.method === "POST" && url.pathname === "/api/workflow/notes/draft") {
         const body = await readJsonBody(request);
         if (body.approvedExternalProcessing !== true) throw httpError(400, "Explicit approval is required before sending selected evidence to the drafting provider.");
-        const canonical = body.feedbackThreadId && await stateExists() ? await loadCanonicalState() : null;
+        const hasCanonicalState = await stateExists();
+        if (hasCanonicalState && (!body.feedbackThreadId || !body.taskId)) {
+          throw httpError(400, "A canonical feedback thread and task are required before drafting in this workspace.");
+        }
+        const canonical = hasCanonicalState ? await loadCanonicalState() : null;
         const thread = canonical?.feedbackThreads.find(({ id }) => id === body.feedbackThreadId);
         if (canonical && !thread) throw httpError(404, "Feedback thread was not found.");
         const selectedEvidence = canonical
@@ -699,9 +900,9 @@ export function createAppServer(dependencies = {}) {
         }
         if (canonical) {
           try {
-            const result = await revisionWorkflow.recordDraft({ ...body, draft }, { provider: draft.provider ?? body.provider, model: draft.model ?? body.model });
+            const result = issueWorkflowPreview(await revisionWorkflow.recordDraft({ ...body, draft }, { provider: draft.provider ?? body.provider, model: draft.model ?? body.model }));
             sendJson(response, 200, { ...draft, ...result });
-          } catch (error) { throw httpError(error.code === "STATE_STALE" ? 409 : 400, error.message); }
+          } catch (error) { throw mutationRequestError(error); }
           return;
         }
         sendJson(response, 200, draft);
@@ -712,7 +913,9 @@ export function createAppServer(dependencies = {}) {
         const body = await readJsonBody(request);
         const vaultRoot = await requireConfiguredVaultRoot(body.vaultPath);
         try {
-          const artifact = await writeNote(body.preview, { vaultPath: vaultRoot, approved: body.approved });
+          if (body.approved !== true) throw httpError(400, "Explicit approval is required before writing a note.");
+          const preview = consumeNotePreview(body.preview);
+          const artifact = await writeNote(preview, { vaultPath: vaultRoot, approved: true });
           sendJson(response, 201, artifact);
         } catch (error) {
           throw httpError(400, error.message);
@@ -749,7 +952,7 @@ export function createAppServer(dependencies = {}) {
         sendJson(response, 400, { status: "invalid_request", code: error.code, message: error.message });
         return;
       }
-      if (error.code === "PROFILE_INCOMPLETE" || error.code === "STATE_STALE") {
+      if (error.code === "PROFILE_INCOMPLETE" || error.code === "STATE_STALE" || error.code === "STATE_LOCK_TIMEOUT") {
         sendJson(response, 409, { status: "conflict", code: error.code, message: error.message, ...(error.missing ? { missing: error.missing } : {}) });
         return;
       }

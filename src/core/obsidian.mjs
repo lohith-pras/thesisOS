@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { compactEvidenceText, validateGroundedDraft } from "./note-drafting.mjs";
@@ -19,6 +19,8 @@ function yamlString(value) {
 function noteIdentity(feedback) {
   return createHash("sha256").update(String(feedback).trim()).digest("hex").slice(0, 10);
 }
+
+const EVIDENCE_NOTE_FILENAME = /^literature-evidence--[a-z0-9]+(?:-[a-z0-9]+)*--[a-f0-9]{10}\.md$/;
 
 function feedbackLabel(feedback) {
   const words = String(feedback).replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
@@ -78,14 +80,16 @@ export async function writeObsidianNote(preview, { vaultPath, approved, mkdirImp
   const filename = requireText(preview?.filename, "Note filename");
   requireText(preview?.markdown, "Note Markdown");
   const markdown = preview.markdown;
-  if (!filename.startsWith("literature-evidence--") || !filename.endsWith(".md")) throw new Error("Note filename does not match the preview format.");
+  if (!EVIDENCE_NOTE_FILENAME.test(filename)) throw new Error("Note filename does not match the preview format.");
   const directory = resolve(root, "10_Literature_Notes");
   const path = resolve(directory, filename);
   await mkdirImpl(directory, { recursive: true });
+  if ((await lstat(directory)).isSymbolicLink()) throw new Error("The managed Obsidian notes directory cannot be a symbolic link.");
   try {
     await writeFileImpl(path, markdown, { encoding: "utf8", flag: "wx" });
   } catch (error) {
     if (error.code === "EEXIST") {
+      if ((await lstat(path)).isSymbolicLink()) throw new Error("The managed Obsidian note cannot be a symbolic link.");
       let existing;
       try { existing = await readFileImpl(path, "utf8"); } catch { existing = ""; }
       if (!existing.includes("managed_by: proofline") && !existing.includes("managed_by: thesisos")) throw new Error(`An unmanaged Obsidian note already exists at '${path}'. Choose a different feedback note.`);
