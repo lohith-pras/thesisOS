@@ -399,7 +399,7 @@ function tasks() {
   const paragraphs = feedback.split(/\n\s*\n/).filter(Boolean);
   return `<div class="page-intro compact">${eyebrow("Review / tasks")}<h1>Approve, then continue in the right place.</h1><p>Obsidian, VS Code, and Overleaf tasks approve the task and open the linked workspace in one deliberate handoff. Other tasks still open for review first.</p></div><section class="task-layout"><div class="task-graph panel"><div class="panel-head"><span class="label">SOURCE FEEDBACK</span><span class="timestamp">${state.runtime ? `${esc(state.runtime.provider)} · ${esc(state.runtime.model)}` : "Stored locally"}</span></div><div class="feedback-reading"><p class="feedback-reading-note">Cleaned for reading. The original feedback is retained unchanged.</p>${paragraphs.slice(0, 2).map((paragraph) => `<p>${esc(paragraph)}</p>`).join("")}${paragraphs.length > 2 ? `<details><summary>Read the remaining ${paragraphs.length - 2} paragraph${paragraphs.length === 3 ? "" : "s"}</summary>${paragraphs.slice(2).map((paragraph) => `<p>${esc(paragraph)}</p>`).join("")}</details>` : ""}</div><div class="graph-line"></div>${state.tasks.map((task, index) => {
     const handoff = ["obsidian", "vscode", "overleaf"].includes(task.tool);
-    const action = handoff ? (task.approvalStatus === "pending" ? `approve-and-open:${task.id}` : `open-task-tool:${task.id}`) : `open-task:${task.id}`;
+    const action = handoff ? (task.approvalStatus === "pending" ? `request-approve-and-open:${task.id}` : `open-task-tool:${task.id}`) : `open-task:${task.id}`;
     const detail = handoff && task.approvalStatus === "pending" ? `Approve & open ${task.tool}` : `${task.tool} · ${statusLabel(task.approvalStatus)}`;
     return `<button class="graph-task ${esc(task.approvalStatus)}" data-action="${esc(action)}"><span>${String(index + 1).padStart(2, "0")}</span><strong>${esc(task.title)}</strong><small>${esc(detail)}</small><b>→</b></button>`;
   }).join("")}</div><aside class="approval-panel"><span class="label">APPROVAL MODEL</span><h2>Approve here.<br />Continue there.</h2><p>Opening a linked workspace never makes a write on your behalf.</p><div class="approval-box"><i>✓</i><span>Approved tasks<br /><strong>${state.tasks.filter((task) => task.approvalStatus === "approved").length} of ${state.tasks.length}</strong></span></div></aside></section>`;
@@ -410,6 +410,12 @@ function paperCard(paper, index) {
   const selectable = state.candidates.some((candidate) => candidate.sourceId === paper.sourceId);
   const selected = state.selectedSourceIds.includes(paper.sourceId);
   return `<article class="candidate panel${selected ? " selected" : ""}"><div class="candidate-number">${String(index + 1).padStart(2, "0")}</div><div class="candidate-main"><span class="label">${esc(statusLabel(paper.itemType || "bibliographic item"))}${paper.year ? ` · ${esc(paper.year)}` : ""}</span><h2>${esc(paper.title)}</h2><p class="authors">${paper.creators?.length ? esc(paper.creators.join("; ")) : "No creator metadata"}</p><p class="publication">${esc(paper.publicationTitle || "No publication venue recorded")}</p><p class="doi">${paper.doi ? `DOI ${esc(paper.doi)}` : `Zotero key ${esc(paper.key)}`}${destination ? ` <a href="${esc(destination)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}</p>${selectable ? button(selected ? "Selected as evidence ✓" : "Select as evidence", `toggle-evidence:${paper.sourceId}`, selected ? "dark" : "outline") : ""}</div><div class="candidate-source"><span class="label">${paper.matchScore !== undefined ? `MATCH ${Math.round(paper.matchScore * 100)}%` : "SOURCE ID"}</span><code>${esc(paper.sourceId)}</code><p>${paper.matchReasons?.length ? esc(paper.matchReasons.join(" · ")) : `Read-only metadata from ${esc(state.connection.library?.name || "the selected Zotero library")}.`}</p></div></article>`;
+}
+
+function evidenceSelectionBar(showingSearchResults) {
+  if (!showingSearchResults || !state.candidates.length) return "";
+  const count = state.selectedSourceIds.length;
+  return `<aside class="evidence-selection-bar panel" aria-live="polite"><div><span class="label">EVIDENCE SELECTION</span><strong>${count ? `${count} paper${count === 1 ? "" : "s"} selected` : "Select reviewed papers"}</strong><p>${count ? "Only these Zotero source IDs can enter the grounded note." : "Selections stay local until you deliberately attach them to this approved task."}</p></div>${button(count ? `Attach ${count} as evidence →` : "Attach evidence →", "attach-evidence", "dark", state.workflowBusy || count === 0)}</aside>`;
 }
 
 const demoFeedbackOptions = [
@@ -437,15 +443,16 @@ function noteWorkflowPanel() {
   const boundaryCheck = state.notePreview && state.evidenceRefs.length && !isDemo ? `<div class="note-actions"><button class="button button-outline" data-action="test-citation-boundary"${state.workflowBusy ? " disabled" : ""}>Verify citation boundary</button></div><p class="helper">Uses a deliberately invalid local test ID. It does not change Zotero, create a note preview, or write any file.</p>` : "";
   const boundaryStatus = !isDemo ? sectionActivity(["citation-boundary"]) : "";
   const boundaryProof = !isDemo ? citationBoundaryProofPanel() : "";
+  const discardControl = state.notePreview && !state.noteWrite ? `<div class="note-actions">${button("Discard preview", "request-discard-note-preview", "outline", state.workflowBusy)}</div>` : "";
   const writeControls = state.notePreview ? (isDemo
     ? `<p class="demo-boundary">Judge mode stops at preview. No filesystem write is performed.</p>`
     : state.obsidianVaultPath
-      ? `<div class="vault-connected"><span class="label">OBSIDIAN VAULT CONNECTED</span><code>${esc(state.obsidianVaultPath)}</code><button class="text-button" data-action="change-obsidian-vault">Change vault</button></div><p class="helper">Notes go into <code>10_Literature_Notes/</code> inside this vault. Each feedback thread has its own note; Proofline updates only notes it previously created.</p>${button(state.noteWrite ? (state.noteWrite.updated ? "Note updated ✓" : "Note written ✓") : "Approve and write note", "write-obsidian-note", "dark", Boolean(state.noteWrite))}`
+      ? `<div class="vault-connected"><span class="label">OBSIDIAN VAULT CONNECTED</span><code>${esc(state.obsidianVaultPath)}</code><button class="text-button" data-action="change-obsidian-vault">Change vault</button></div><p class="helper">Notes go into <code>10_Literature_Notes/</code> inside this vault. Each feedback thread has its own note; Proofline updates only notes it previously created.</p>${button(state.noteWrite ? (state.noteWrite.updated ? "Note updated ✓" : "Note written ✓") : "Approve and write note", "request-write-obsidian-note", "dark", Boolean(state.noteWrite))}`
       : `<div class="vault-setup"><h3>Where should this note live?</h3><p>Choose an existing Obsidian vault, or create a new project vault. Proofline remembers your choice for this project.</p><div class="note-actions">${button("Choose existing vault", "choose-existing-vault", "dark")} ${button("Create new vault", "create-obsidian-vault", "outline")}</div></div>`) : "";
   const traceableNotes = state.noteDraft?.sourceNotes ?? [];
   const traceback = state.claimTraceback ? `<article class="claim-traceback-result"><span class="label">TRACE COMPLETE</span><h3>${esc(state.claimTraceback.source.title)}</h3><div class="trace-explanation"><section><span>01</span><div><strong>Draft statement</strong><p>${esc(state.claimTraceback.claim?.summary || "No grounded source-note text was recorded.")}</p></div></section><section><span>02</span><div><strong>What this paper contributes</strong><p>${esc(state.claimTraceback.source.abstract || "The selected source has no abstract in this fixture.")}</p></div></section><section><span>03</span><div><strong>Why it matters here</strong><p>${esc(state.claimTraceback.claim?.relevance || "Researcher review is required before using this statement in the thesis.")}</p></div></section><section><span>04</span><div><strong>Review trail</strong><p><b>Supervisor asked:</b> ${esc(state.claimTraceback.feedback.comment)}</p><p><b>You approved:</b> ${esc(state.claimTraceback.task.title)}</p><small>Evidence ID: <code>${esc(state.claimTraceback.source.sourceId)}</code>${state.claimTraceback.responseMatrix ? ` · ${esc(state.claimTraceback.responseMatrix.status)}` : ""}</small></div></section></div></article>` : "";
   const tracePanel = state.notePreview && traceableNotes.length && state.feedbackThreadId ? `<section class="claim-traceback"><div><span class="label">CLAIM TRACEBACK</span><h3>Can this draft statement be defended?</h3><p>Choose a source to see its evidence and the feedback it addresses.</p></div><div class="trace-buttons">${traceableNotes.map((note, index) => button(`Trace source ${index + 1} →`, `trace-claim:${note.sourceId}`, "outline", state.workflowBusy)).join("")}</div>${traceback}</section>` : "";
-  return `<section class="panel note-workflow"><div class="panel-head"><span class="label">OBSIDIAN NOTE</span><span class="timestamp">${state.noteWrite ? (state.noteWrite.updated ? "Updated with approval" : "Written with approval") : state.notePreview ? "Preview only" : "No write yet"}</span></div><h2>${state.noteWrite ? (state.noteWrite.updated ? "Literature note updated." : "Literature note created.") : "Turn selected evidence into a grounded note."}</h2><p>${state.noteWrite ? `Saved to ${esc(state.noteWrite.path)}` : "Drafting and filesystem writing are separate approval boundaries."}</p>${sectionActivity(["evidence-attach", "codex-draft", "note-preview", "claim-traceback", "vault-picker", "vault-write"])}${draftWarning}${draftControls}${noteReadModelPanel()}${tracePanel}${boundaryCheck}${boundaryStatus}${boundaryProof}${writeControls}</section>`;
+  return `<section class="panel note-workflow"><div class="panel-head"><span class="label">OBSIDIAN NOTE</span><span class="timestamp">${state.noteWrite ? (state.noteWrite.updated ? "Updated with approval" : "Written with approval") : state.notePreview ? "Preview only" : "No write yet"}</span></div><h2>${state.noteWrite ? (state.noteWrite.updated ? "Literature note updated." : "Literature note created.") : "Turn selected evidence into a grounded note."}</h2><p>${state.noteWrite ? `Saved to ${esc(state.noteWrite.path)}` : "Drafting and filesystem writing are separate approval boundaries."}</p>${sectionActivity(["evidence-attach", "codex-draft", "note-preview", "claim-traceback", "vault-picker", "vault-write"])}${draftWarning}${draftControls}${noteReadModelPanel()}${tracePanel}${boundaryCheck}${boundaryStatus}${boundaryProof}${writeControls}${discardControl}</section>`;
 }
 
 function evidence() {
@@ -456,7 +463,7 @@ function evidence() {
   const approvedLiteratureTask = literatureTask?.approvalStatus === "approved" ? literatureTask : null;
   const searchLabel = state.searchQuery?.trim() || literatureTask?.title || "Approved literature task";
   const libraryAction = showingSearchResults
-    ? `${state.candidates.length ? button(state.workflowBusy ? "Attaching evidence…" : `Attach ${state.selectedSourceIds.length} as evidence →`, "attach-evidence", "dark", state.workflowBusy || state.selectedSourceIds.length === 0) : ""}${button("Show all papers", "clear-search", "outline", state.workflowBusy)}`
+    ? button("Show all papers", "clear-search", "outline", state.workflowBusy)
     : approvedLiteratureTask
       ? `${button("Search approved literature →", "search-zotero")}${button("Export library JSON ↗", "export-json", "outline")}`
       : literatureTask
@@ -468,7 +475,7 @@ function evidence() {
   const results = showingSearchResults && !visiblePapers.length
     ? emptyState("No papers matched", `Zotero found no papers for “${state.searchArtifact?.query || state.searchQuery}”. Refine the query and search again.`)
     : `<section class="evidence-list">${visiblePapers.map(paperCard).join("")}</section>`;
-  return `<div class="page-intro compact">${eyebrow("Library / Zotero")}<h1>${showingSearchResults ? "Choose the papers to use." : "Find evidence in your library."}</h1><p>${showingSearchResults ? `${state.candidates.length} papers found for this approved task. ${state.candidates.length ? "Select the papers you have reviewed and want to use." : "Try a broader search below."}` : `${state.connection.paperCount} papers are available from ${esc(state.connection.library?.name || "your selected library")}. Your Zotero library stays read-only.`}</p></div>${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<section class="evidence-toolbar"><div><span class="label">${showingSearchResults ? "SEARCHING FOR" : "SELECTED LIBRARY"}</span><strong>${showingSearchResults ? esc(searchLabel) : esc(state.connection.library?.name || state.connection.library?.id)}</strong></div><span class="connection connected"><i></i>${showingSearchResults ? `${state.candidates.length} found · ${state.selectedSourceIds.length} selected` : `Read-only · ${state.connection.paperCount} papers`}</span>${libraryAction}</section>${retrievalNotice}${searchForm}${results}<div class="artifact-note"><i>◇</i><span>${state.evidenceSelection ? `<strong>${state.evidenceSelection.selectedCount} papers selected</strong> · continue in Evidence notes` : "Your Zotero library is read-only. Selecting a paper never changes Zotero."}</span></div>${evidenceHandoff}`;
+  return `<div class="page-intro compact">${eyebrow("Library / Zotero")}<h1>${showingSearchResults ? "Choose the papers to use." : "Find evidence in your library."}</h1><p>${showingSearchResults ? `${state.candidates.length} papers found for this approved task. ${state.candidates.length ? "Select the papers you have reviewed and want to use." : "Try a broader search below."}` : `${state.connection.paperCount} papers are available from ${esc(state.connection.library?.name || "your selected library")}. Your Zotero library stays read-only.`}</p></div>${state.workflowError ? `<p class="form-error" role="alert">${esc(state.workflowError)}</p>` : ""}<section class="evidence-toolbar"><div><span class="label">${showingSearchResults ? "SEARCHING FOR" : "SELECTED LIBRARY"}</span><strong>${showingSearchResults ? esc(searchLabel) : esc(state.connection.library?.name || state.connection.library?.id)}</strong></div><span class="connection connected"><i></i>${showingSearchResults ? `${state.candidates.length} found · ${state.selectedSourceIds.length} selected` : `Read-only · ${state.connection.paperCount} papers`}</span>${libraryAction}</section>${retrievalNotice}${searchForm}${evidenceSelectionBar(showingSearchResults)}${results}<div class="artifact-note"><i>◇</i><span>${state.evidenceSelection ? `<strong>${state.evidenceSelection.selectedCount} papers selected</strong> · continue in Evidence notes` : "Your Zotero library is read-only. Selecting a paper never changes Zotero."}</span></div>${evidenceHandoff}`;
 }
 
 function noteProgress() {
@@ -582,7 +589,7 @@ function connectDemoLibrary() { return requestConnection("/api/demo/library"); }
 function selectZotero(library) { return requestConnection("/api/zotero/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ library, expectedRevision: state.projectState?.revision }) }); }
 
 function closeTaskModal() {
-  const modal = document.querySelector(".modal-backdrop");
+  const modal = [...document.querySelectorAll(".modal-backdrop")].at(-1);
   if (!modal || modal.dataset.closing === "true") return;
   const returnFocus = modal.returnFocus;
   const remove = () => {
@@ -614,7 +621,7 @@ function openTask(id) {
     ? "Approve this read-only literature task and Proofline will immediately search Zotero and open the results."
     : "This proposed task traces back to the validated feedback artifact. Approval changes the task state; write integrations still require a separate approval.";
   const taskAction = task.approvalStatus === "pending"
-    ? `${button(canLaunchLiterature ? "Approve & search Zotero →" : "Approve task", `approve-task:${task.id}`, "dark", state.workflowBusy)}${button("Reject", `reject-task:${task.id}`, "outline", state.workflowBusy)}`
+    ? `${button(canLaunchLiterature ? "Approve & search Zotero →" : "Approve task", `request-approve-task:${task.id}`, "dark", state.workflowBusy)}${button("Reject", `reject-task:${task.id}`, "outline", state.workflowBusy)}`
     : task.approvalStatus === "approved" && task.kind === "literature"
       ? button(state.workflowBusy ? "Searching…" : "Search Zotero →", "search-zotero", "dark", state.workflowBusy || state.connection.status !== "connected")
       : `<span class="muted-action">Task ${esc(task.approvalStatus)}</span>`;
@@ -637,6 +644,23 @@ function openTask(id) {
   modal.querySelector("[data-close-modal]")?.focus();
 }
 
+function openConfirmation({ eyebrow: label, title, copy, confirmLabel, confirmAction, returnFocus = document.activeElement }) {
+  const modal = document.createElement("div");
+  modal.className = "modal-backdrop confirmation-backdrop";
+  modal.returnFocus = returnFocus instanceof HTMLElement ? returnFocus : null;
+  modal.innerHTML = `<section class="task-modal confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="confirmation-title"><button class="modal-close" data-close-modal aria-label="Close">×</button><span class="label">${esc(label)}</span><h2 id="confirmation-title">${esc(title)}</h2><p class="modal-copy">${esc(copy)}</p><div class="confirmation-boundary"><span>Authority check</span><strong>${esc(confirmLabel)}</strong></div><div class="modal-actions">${button(confirmLabel, `confirm-action:${confirmAction}`, "dark")}<button class="text-button" data-close-modal>Go back</button></div></section>`;
+  modal.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") return closeTaskModal();
+    if (event.key !== "Tab") return;
+    const focusable = [...modal.querySelectorAll("button:not([disabled])")];
+    const first = focusable[0], last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  });
+  document.body.append(modal);
+  modal.querySelector("[data-close-modal]")?.focus();
+}
+
 async function openTaskTool(taskOrTool) {
   const tool = typeof taskOrTool === "string" ? taskOrTool : taskOrTool?.tool;
   if (!["obsidian", "vscode", "overleaf"].includes(tool)) return;
@@ -651,6 +675,40 @@ async function openTaskTool(taskOrTool) {
 }
 
 async function handleAction(action) {
+  if (action.startsWith("confirm-action:")) {
+    const confirmedAction = action.slice("confirm-action:".length);
+    // Remove the confirmation synchronously so a follow-up task decision can close the
+    // task-detail modal beneath it without waiting for the exit animation.
+    [...document.querySelectorAll(".confirmation-backdrop")].at(-1)?.remove();
+    return handleAction(confirmedAction);
+  }
+  if (action.startsWith("request-approve-task:") || action.startsWith("request-approve-and-open:")) {
+    const [request, taskId] = action.split(":");
+    const task = getTask(taskId);
+    if (!task || state.workflowBusy) return;
+    const opening = request === "request-approve-and-open";
+    openConfirmation({ eyebrow: "TASK APPROVAL", title: `Approve “${task.title}”?`, copy: opening ? `This records your approval, then opens the configured ${task.tool} workspace. Proofline will not write files.` : "This records your approval in the canonical task graph. It does not write files or change Zotero.", confirmLabel: opening ? `Approve & open ${task.tool}` : "Approve task", confirmAction: `${opening ? "approve-and-open" : "approve-task"}:${taskId}` });
+    return;
+  }
+  if (action === "request-write-obsidian-note") {
+    if (!state.notePreview || !state.obsidianVaultPath || state.workflowBusy) return;
+    openConfirmation({ eyebrow: "LOCAL FILE WRITE", title: "Write this approved note to Obsidian?", copy: `This writes the reviewed preview into 10_Literature_Notes inside ${state.obsidianVaultPath}. Zotero remains unchanged.`, confirmLabel: "Write approved note", confirmAction: "write-obsidian-note" });
+    return;
+  }
+  if (action === "request-discard-note-preview") {
+    if (!state.notePreview || state.workflowBusy) return;
+    openConfirmation({ eyebrow: "DISCARD PREVIEW", title: "Discard this note preview?", copy: "The preview and its draft will be removed from this workspace. Your selected evidence and approved task stay intact.", confirmLabel: "Discard preview", confirmAction: "discard-note-preview" });
+    return;
+  }
+  if (action === "discard-note-preview") {
+    state.noteDraft = null;
+    state.notePreview = null;
+    state.claimTraceback = null;
+    state.demoRejectionProof = null;
+    saveState();
+    completeActivity("Preview discarded.", "Selected evidence remains available for a new grounded note.");
+    return render();
+  }
   if (action === "toggle-theme") { state.theme = state.theme === "dark" ? "light" : "dark"; saveState(); return render(); }
   if (action === "sign-out") {
     localStorage.removeItem(STORAGE_KEY);

@@ -957,6 +957,23 @@ test("frontend previews and explicitly approves Obsidian note writes", async () 
   assert.match(source, /approved:\s*true/);
   assert.match(source, /Choose existing vault/);
   assert.match(source, /OBSIDIAN VAULT CONNECTED/);
+  assert.match(source, /request-write-obsidian-note/);
+  assert.match(source, /LOCAL FILE WRITE/);
+  assert.match(source, /Discard preview/);
+});
+
+test("frontend keeps selected evidence actionable and confirms authority-changing actions", async () => {
+  const source = await readFile(resolve("app/app.js"), "utf8");
+  const styles = await readFile(resolve("app/styles.css"), "utf8");
+
+  assert.match(source, /EVIDENCE SELECTION/);
+  assert.match(source, /Only these Zotero source IDs can enter the grounded note/);
+  assert.match(source, /request-approve-task:/);
+  assert.match(source, /request-approve-and-open:/);
+  assert.match(source, /TASK APPROVAL/);
+  assert.match(source, /confirm-action:/);
+  assert.match(styles, /\.evidence-selection-bar\{position:sticky/);
+  assert.match(styles, /\.confirmation-modal/);
 });
 
 test("frontend offers a clearly labelled opt-in demo library", async () => {
